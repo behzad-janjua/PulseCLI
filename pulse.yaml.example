@@ -1,0 +1,55 @@
+# PulseCLI — example recipe config
+# Copy to pulse.yaml to activate. Delete pulse.yaml to fall back to default behaviour.
+#
+# Action types:
+#   dictate          — toggle voice recording (FIST behaviour)
+#   key: [...]       — hold modifier keys and tap the last key
+#   type: "text"     — type a literal string at the cursor
+#   shell: "cmd"     — run a shell command in the background
+
+profiles:
+  # "default" applies when no app-specific profile matches the frontmost window.
+  default:
+    fist: dictate
+    wave_out:
+      action: key
+      keys: [cmd, tab]
+    wave_in:
+      action: key
+      keys: [cmd, shift, tab]
+    fingers_spread:
+      action: key
+      keys: [ctrl, up]
+
+  # App-specific overrides — name must match the macOS process name exactly.
+  # Run `osascript -e 'tell app "System Events" to get name of first process whose frontmost is true'`
+  # to find the right name for any app.
+  Terminal:
+    fist: dictate
+    wave_out:
+      action: key
+      keys: [cmd, tab]
+
+  Xcode:
+    fist:
+      action: key
+      keys: [cmd, b]           # Build
+    wave_out:
+      action: key
+      keys: [cmd, r]           # Run
+    fingers_spread:
+      action: key
+      keys: [cmd, shift, k]    # Clean
+
+sequences:
+  # Sequences fire only when the full gesture chain is detected within 1.2 s.
+  # They take priority over single-gesture profile bindings.
+  - gestures: [fist, wave_out]
+    action:
+      action: shell
+      command: "open -a 'Claude'"
+
+  - gestures: [wave_in, wave_out]
+    action:
+      action: type
+      text: "Hello from PulseCLI!"

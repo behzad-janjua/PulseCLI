@@ -25,19 +25,30 @@ class VoiceTrigger:
         self._worker: threading.Thread | None = None
         self._claude_proc: subprocess.Popen | None = None
 
+    def toggle(self) -> None:
+        """Start or stop recording. Called by RecipeHandler for 'dictate' actions."""
+        if not self._recording:
+            self._recording = True
+            self._recorder.start()
+            print(f"{YELLOW}[PULSE] recording...{RESET}", flush=True)
+        else:
+            self._recording = False
+            print(f"{YELLOW}[PULSE] transcribing...{RESET}", flush=True)
+            self._worker = threading.Thread(
+                target=self._transcribe_and_send, daemon=True
+            )
+            self._worker.start()
+
+    def cancel(self) -> None:
+        """Cancel an in-progress recording."""
+        if self._recording:
+            self._recording = False
+            self._recorder.stop_and_transcribe()  # discard
+            print(f"{RED}[PULSE] recording cancelled{RESET}", flush=True)
+
     def __call__(self, event: GestureEvent) -> None:
         if event.gesture == Gesture.FIST:
-            if not self._recording:
-                self._recording = True
-                self._recorder.start()
-                print(f"{YELLOW}[PULSE] recording...{RESET}", flush=True)
-            else:
-                self._recording = False
-                print(f"{YELLOW}[PULSE] transcribing...{RESET}", flush=True)
-                self._worker = threading.Thread(
-                    target=self._transcribe_and_send, daemon=True
-                )
-                self._worker.start()
+            self.toggle()
 
         elif event.gesture == Gesture.WAVE_OUT:
             self._handle_interrupt()
@@ -54,9 +65,7 @@ class VoiceTrigger:
 
     def _handle_interrupt(self) -> None:
         if self._recording:
-            self._recording = False
-            self._recorder.stop_and_transcribe()  # discard
-            print(f"{RED}[PULSE] recording cancelled{RESET}", flush=True)
+            self.cancel()
             return
 
         if self._claude_proc and self._claude_proc.poll() is None:

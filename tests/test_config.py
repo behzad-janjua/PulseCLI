@@ -1,0 +1,121 @@
+import textwrap
+import unittest
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+
+from pulse.config import ConfigError, load_config
+
+
+def _write_yaml(content: str) -> Path:
+    f = NamedTemporaryFile(mode="w", suffix=".yaml", delete=False)
+    f.write(textwrap.dedent(content))
+    f.close()
+    return Path(f.name)
+
+
+class TestLoadConfig(unittest.TestCase):
+    def test_returns_none_when_file_missing(self):
+        self.assertIsNone(load_config(Path("/nonexistent/pulse.yaml")))
+
+    def test_minimal_config(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                fist: dictate
+        """)
+        cfg = load_config(p)
+        self.assertIsNotNone(cfg)
+        action = cfg.profiles["default"]["fist"]
+        self.assertEqual(action.type, "dictate")
+        p.unlink()
+
+    def test_key_action(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                wave_out:
+                  action: key
+                  keys: [cmd, tab]
+        """)
+        cfg = load_config(p)
+        action = cfg.profiles["default"]["wave_out"]
+        self.assertEqual(action.type, "key")
+        self.assertEqual(action.keys, ["cmd", "tab"])
+        p.unlink()
+
+    def test_type_action(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                fist:
+                  action: type
+                  text: "hello world"
+        """)
+        cfg = load_config(p)
+        action = cfg.profiles["default"]["fist"]
+        self.assertEqual(action.type, "type")
+        self.assertEqual(action.text, "hello world")
+        p.unlink()
+
+    def test_shell_action(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                fist:
+                  action: shell
+                  command: "echo hi"
+        """)
+        cfg = load_config(p)
+        action = cfg.profiles["default"]["fist"]
+        self.assertEqual(action.type, "shell")
+        self.assertEqual(action.command, "echo hi")
+        p.unlink()
+
+    def test_sequence_parsed(self):
+        p = _write_yaml("""
+            profiles: {}
+            sequences:
+              - gestures: [fist, wave_out]
+                action: dictate
+        """)
+        cfg = load_config(p)
+        self.assertEqual(len(cfg.sequences), 1)
+        seq = cfg.sequences[0]
+        self.assertEqual(seq.gestures, ["fist", "wave_out"])
+        self.assertEqual(seq.action.type, "dictate")
+        p.unlink()
+
+    def test_unknown_action_raises(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                fist: jump
+        """)
+        with self.assertRaises(ConfigError):
+            load_config(p)
+        p.unlink()
+
+    def test_sequence_requires_two_gestures(self):
+        p = _write_yaml("""
+            profiles: {}
+            sequences:
+              - gestures: [fist]
+                action: dictate
+        """)
+        with self.assertRaises(ConfigError):
+            load_config(p)
+        p.unlink()
+
+    def test_sequence_missing_action_raises(self):
+        p = _write_yaml("""
+            profiles: {}
+            sequences:
+              - gestures: [fist, wave_out]
+        """)
+        with self.assertRaises(ConfigError):
+            load_config(p)
+        p.unlink()
+
+
+if __name__ == "__main__":
+    unittest.main()

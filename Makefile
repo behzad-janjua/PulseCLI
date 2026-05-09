@@ -1,4 +1,4 @@
-.PHONY: run discover custom collect train install deps
+.PHONY: run discover custom collect train install deps test
 
 run:
 	.venv/bin/python3 main.py
@@ -20,6 +20,9 @@ train:
 
 deps:
 	brew install portaudio ffmpeg
+
+test:
+	.venv/bin/python3 -m pytest tests/ -v
 
 install:
 	python3 -m venv .venv && .venv/bin/pip install -e .

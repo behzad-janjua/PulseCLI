@@ -55,7 +55,54 @@ Grant your terminal **Accessibility** and **Microphone** permissions in System S
 make run        # hardware gesture classifier (default)
 make custom     # your personal trained classifier
 make discover   # debug mode — prints raw MYO pose values
+make test       # run unit tests (no hardware required)
 ```
+
+---
+
+## Recipe config (`pulse.yaml`)
+
+Drop a `pulse.yaml` at the project root to remap any gesture to any action — no Python required.
+Delete it to go back to the default behaviour.
+
+```yaml
+profiles:
+  default:
+    fist: dictate              # toggle voice recording
+    wave_out:
+      action: key
+      keys: [cmd, tab]         # hold Cmd, tap Tab
+    wave_in:
+      action: key
+      keys: [cmd, shift, tab]
+    fingers_spread:
+      action: key
+      keys: [ctrl, up]         # Mission Control
+
+  # App-specific overrides (macOS process name)
+  Xcode:
+    fist:
+      action: key
+      keys: [cmd, b]           # Build instead of dictate
+
+sequences:
+  # Chain of gestures fired within 1.2 s
+  - gestures: [fist, wave_out]
+    action:
+      action: shell
+      command: "open -a 'Claude'"
+```
+
+### Action types
+
+| Type | Fields | Effect |
+|---|---|---|
+| `dictate` | — | Toggle voice recording (FIST default) |
+| `key` | `keys: [...]` | Hold modifiers, tap last key |
+| `type` | `text: "..."` | Type literal text at cursor |
+| `shell` | `command: "..."` | Run shell command in background |
+
+See `pulse.yaml.example` for a fully annotated reference config.
 
 ---
 
@@ -90,11 +137,13 @@ myo_reader.py       — gesture detection (hardware or custom EMG classifier)
     ↓
 Dispatcher          — routes GestureEvents to registered handlers
     ↓
-┌─────────────────────────────────┐
-│ handlers/logger.py              │  logs every event
-│ handlers/voice_trigger.py       │  FIST → record → Whisper → type
-│ handlers/window_navigator.py    │  WAVE → Cmd+Tab
-└─────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│ handlers/logger.py                      │  logs every event
+│ handlers/recipe_handler.py  (if yaml)   │  gesture → action from pulse.yaml
+│   └── frontmost_app.py                  │  macOS app detection for profiles
+│ handlers/voice_trigger.py   (default)   │  FIST → record → Whisper → type
+│ handlers/window_navigator.py (default)  │  WAVE → Cmd+Tab
+└─────────────────────────────────────────┘
 ```
 
 Adding a new gesture action is one line: `dispatcher.register(your_handler)`.
@@ -106,21 +155,28 @@ Adding a new gesture action is one line: `dispatcher.register(your_handler)`.
 ```
 PulseCLI/
 ├── main.py                         entry point
+├── pulse.yaml.example              annotated recipe config reference
 ├── pulse/
 │   ├── myo_reader.py               MYO connection + gesture pipeline
 │   ├── dispatcher.py               event routing
 │   ├── events.py                   GestureEvent dataclass
 │   ├── gestures.py                 Gesture enum
+│   ├── config.py                   pulse.yaml parser + dataclasses
+│   ├── frontmost_app.py            macOS frontmost app detection
 │   ├── voice_recorder.py           mic capture + Whisper transcription
 │   ├── emg/
 │   │   └── features.py             EMG signal feature extraction
 │   └── handlers/
+│       ├── recipe_handler.py       YAML-driven gesture → action dispatch
 │       ├── voice_trigger.py        voice recording + typing
 │       ├── window_navigator.py     app switching
 │       └── logger.py               event logging
-└── scripts/
-    ├── collect.py                  EMG training data collection
-    └── train.py                    gesture classifier training
+├── scripts/
+│   ├── collect.py                  EMG training data collection
+│   └── train.py                    gesture classifier training
+└── tests/
+    ├── test_config.py              config parser tests
+    └── test_recipe.py              recipe handler tests
 ```
 
 ---
