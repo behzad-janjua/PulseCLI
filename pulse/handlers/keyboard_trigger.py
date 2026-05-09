@@ -8,24 +8,33 @@ from pulse.gestures import Gesture
 logger = logging.getLogger(__name__)
 
 _keyboard = Controller()
+_recording = False
 
-# Gesture → keyboard action mapping:
-#   FIST          = hold Space  (start Claude voice recording)
-#   REST          = release Space (submit recording to Claude)
-#   WAVE_OUT      = Escape (cancel / interrupt Claude)
-#   WAVE_IN       = Enter (confirm)
+# Gesture → action mapping:
+#   FIST (1st)     = press Space  (start recording)
+#   FIST (2nd)     = release Space (submit to Claude)
+#   WAVE_OUT       = Escape (cancel / interrupt)
+#   WAVE_IN        = Enter (confirm)
 #   FINGERS_SPREAD = no action yet
 
 
 def keyboard_trigger(event: GestureEvent) -> None:
-    if event.gesture == Gesture.FIST:
-        logger.info("[KEY] Space held — recording")
-        _keyboard.press(Key.space)
+    global _recording
 
-    elif event.gesture == Gesture.REST:
-        _keyboard.release(Key.space)
+    if event.gesture == Gesture.FIST:
+        if not _recording:
+            _keyboard.press(Key.space)
+            _recording = True
+            logger.info("[KEY] recording started")
+        else:
+            _keyboard.release(Key.space)
+            _recording = False
+            logger.info("[KEY] recording submitted")
 
     elif event.gesture == Gesture.WAVE_OUT:
+        if _recording:
+            _keyboard.release(Key.space)
+            _recording = False
         logger.info("[KEY] Escape — interrupt")
         _keyboard.press(Key.esc)
         _keyboard.release(Key.esc)
