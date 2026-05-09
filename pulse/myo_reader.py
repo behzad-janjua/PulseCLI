@@ -1,4 +1,5 @@
 import logging
+import struct
 import sys
 import threading
 import time
@@ -129,6 +130,7 @@ class MyoReader:
         self._stop_event.set()
 
     def start(self) -> None:
+        self._on_myo_state("connecting")
         try:
             self._myo.connect()
         except Exception as e:
@@ -145,7 +147,10 @@ class MyoReader:
 
         try:
             while not self._stop_event.is_set():
-                self._myo.run()
+                try:
+                    self._myo.run()
+                except struct.error:
+                    pass  # malformed BLE packet — skip and keep listening
         except KeyboardInterrupt:
             pass
         finally:
