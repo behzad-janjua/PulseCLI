@@ -1,4 +1,4 @@
-.PHONY: run discover install
+.PHONY: run discover install deps
 
 run:
 	.venv/bin/python3 main.py
@@ -6,5 +6,8 @@ run:
 discover:
 	.venv/bin/python3 main.py --discover
 
+deps:
+	brew install portaudio ffmpeg
+
 install:
-	python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+	python3 -m venv .venv && .venv/bin/pip install -e .

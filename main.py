@@ -1,17 +1,23 @@
 import sys
 
 from pulse.dispatcher import Dispatcher
-from pulse.handlers.keyboard_trigger import keyboard_trigger
 from pulse.handlers.logger import log_event
+from pulse.handlers.voice_trigger import VoiceTrigger
+from pulse.handlers.window_navigator import navigate
 from pulse.myo_reader import MyoReader
+from pulse.voice_recorder import VoiceRecorder
 
 
 def main() -> None:
     discover = "--discover" in sys.argv
 
+    recorder = VoiceRecorder(model_size="base")
+    voice_trigger = VoiceTrigger(recorder)
+
     dispatcher = Dispatcher()
     dispatcher.register(log_event)
-    dispatcher.register(keyboard_trigger)
+    dispatcher.register(voice_trigger)
+    dispatcher.register(navigate)
 
     reader = MyoReader(dispatcher, discover=discover)
     reader.start()

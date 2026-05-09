@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "pulsecli"
+version = "0.1.0"
+description = "Wearable gesture + voice layer for AI-assisted software engineering"
+requires-python = ">=3.11"
+dependencies = [
+    "pyomyo>=0.0.5",
+    "pynput>=1.7",
+    "sounddevice>=0.5.1",
+    "openai-whisper>=20240930",
+    "rumps>=0.4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pulse*"]
