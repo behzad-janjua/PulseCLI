@@ -29,6 +29,7 @@ Voice is transcribed locally using [Whisper](https://github.com/openai/whisper).
 - **sounddevice** — mic capture
 - **Whisper** — local speech-to-text (base model, ~145MB)
 - **pynput** — keyboard simulation for typing and app switching
+- **rumps** — macOS menu bar app
 - **scikit-learn** — personal gesture classifier (optional, trained on your own EMG data)
 
 ---
@@ -57,6 +58,21 @@ make custom     # your personal trained classifier
 make discover   # debug mode — prints raw MYO pose values
 make test       # run unit tests (no hardware required)
 ```
+
+---
+
+## Menu bar
+
+Pulse runs as a macOS menu bar app. Click **Pulse** in the menu bar to see:
+
+| Item | Meaning |
+|---|---|
+| Waiting for Myo… | Dongle connected, armband not yet found |
+| Ready | Armband connected, listening for gestures |
+| Recording… | Voice capture in progress |
+| Transcribing… | Whisper processing audio |
+
+The last phrase you dictated is shown below the status line so you can confirm what was typed.
 
 ---
 
@@ -144,6 +160,10 @@ Dispatcher          — routes GestureEvents to registered handlers
 │ handlers/voice_trigger.py   (default)   │  FIST → record → Whisper → type
 │ handlers/window_navigator.py (default)  │  WAVE → Cmd+Tab
 └─────────────────────────────────────────┘
+    ↓
+engine.py           — owns all hardware/audio; exposes state + action callbacks
+    ↓
+menu_bar.py         — macOS menu bar UI (rumps); reflects live state
 ```
 
 Adding a new gesture action is one line: `dispatcher.register(your_handler)`.
@@ -157,6 +177,8 @@ PulseCLI/
 ├── main.py                         entry point
 ├── pulse.yaml.example              annotated recipe config reference
 ├── pulse/
+│   ├── engine.py                   hardware/audio owner; UI-facing API
+│   ├── menu_bar.py                 macOS menu bar app
 │   ├── myo_reader.py               MYO connection + gesture pipeline
 │   ├── dispatcher.py               event routing
 │   ├── events.py                   GestureEvent dataclass

@@ -31,6 +31,12 @@ class VoiceRecorder:
     def _callback(self, indata: np.ndarray, frames: int, time, status) -> None:
         self._frames.append(indata.copy())
 
+    def close(self) -> None:
+        if self._stream is not None:
+            self._stream.stop()
+            self._stream.close()
+            self._stream = None
+
     def stop_and_transcribe(self) -> str | None:
         if self._stream is not None:
             self._stream.stop()

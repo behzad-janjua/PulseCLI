@@ -1,35 +1,32 @@
 import sys
+import warnings
 
-from pulse.config import load_config
-from pulse.dispatcher import Dispatcher
-from pulse.handlers.logger import log_event
-from pulse.handlers.voice_trigger import VoiceTrigger
-from pulse.handlers.window_navigator import navigate
-from pulse.myo_reader import MyoReader
-from pulse.voice_recorder import VoiceRecorder
+# PyTorch registers a named POSIX semaphore for its thread pool that it never
+# unlinks on exit. The resource_tracker cleans it up correctly — the warning
+# is noise from a known upstream PyTorch issue.
+warnings.filterwarnings(
+    "ignore",
+    message="resource_tracker: There appear to be",
+    category=UserWarning,
+)
+
+from pulse.engine import PulseEngine
 
 
 def main() -> None:
     discover   = "--discover" in sys.argv
     use_custom = "--custom"   in sys.argv
 
-    recorder      = VoiceRecorder(model_size="base")
-    voice_trigger = VoiceTrigger(recorder)
+    engine = PulseEngine(discover=discover, use_custom=use_custom)
 
-    dispatcher = Dispatcher()
-    dispatcher.register(log_event)
+    if discover:
+        engine.run_blocking()
+        return
 
-    config = load_config()
-    if config is not None:
-        from pulse.handlers.recipe_handler import RecipeHandler
-        dispatcher.register(RecipeHandler(config, voice_trigger))
-        print("[PULSE] recipe mode — pulse.yaml loaded", flush=True)
-    else:
-        dispatcher.register(voice_trigger)
-        dispatcher.register(navigate)
-
-    reader = MyoReader(dispatcher, discover=discover, use_custom=use_custom)
-    reader.start()
+    from pulse.menu_bar import PulseApp
+    app = PulseApp(engine)
+    engine.start()
+    app.run()
 
 
 if __name__ == "__main__":

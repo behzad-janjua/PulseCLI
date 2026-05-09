@@ -1,5 +1,6 @@
 import logging
 import sys
+import threading
 import time
 from collections import deque
 from pathlib import Path
@@ -48,10 +49,13 @@ class MyoReader:
         dispatcher: Dispatcher,
         discover: bool = False,
         use_custom: bool = False,
+        on_myo_state=None,
     ) -> None:
-        self._dispatcher  = dispatcher
-        self._discover    = discover
-        self._use_custom  = use_custom
+        self._dispatcher    = dispatcher
+        self._discover      = discover
+        self._use_custom    = use_custom
+        self._on_myo_state  = on_myo_state or (lambda s: None)
+        self._stop_event    = threading.Event()
         self._last_gesture: Gesture | None = None
         self._last_time: float = 0.0
 
@@ -121,11 +125,15 @@ class MyoReader:
 
         self._emit(gesture, metadata)
 
+    def stop(self) -> None:
+        self._stop_event.set()
+
     def start(self) -> None:
         try:
             self._myo.connect()
         except Exception as e:
             logger.error("MYO connection failed: %s\nIs the USB dongle plugged in?", e)
+            self._on_myo_state("disconnected")
             sys.exit(1)
 
         self._myo.add_pose_handler(self._on_pose)
@@ -133,12 +141,14 @@ class MyoReader:
 
         mode = "custom classifier" if self._use_custom else "hardware classifier"
         logger.info("MYO connected [%s]. Listening... (Ctrl+C to stop)", mode)
+        self._on_myo_state("connected")
 
         try:
-            while True:
+            while not self._stop_event.is_set():
                 self._myo.run()
         except KeyboardInterrupt:
             pass
         finally:
             self._myo.disconnect()
+            self._on_myo_state("disconnected")
             logger.info("MYO disconnected.")
