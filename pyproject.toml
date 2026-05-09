@@ -14,7 +14,11 @@ dependencies = [
     "openai-whisper>=20240930",
     "rumps>=0.4.0",
     "PyYAML>=6.0",
+    "scikit-learn>=1.5",
 ]
+
+[project.scripts]
+pulse = "main:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]

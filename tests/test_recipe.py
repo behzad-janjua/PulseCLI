@@ -12,6 +12,10 @@ def _event(gesture: Gesture) -> GestureEvent:
     return GestureEvent(gesture=gesture)
 
 
+def _custom_event(label: str) -> GestureEvent:
+    return GestureEvent(gesture=Gesture.UNKNOWN, metadata={"custom_label": label})
+
+
 def _make_handler(profiles=None, sequences=None):
     config = PulseConfig(
         profiles=profiles or {},
@@ -40,6 +44,17 @@ class TestRecipeHandlerSingleGesture(unittest.TestCase):
             handler(_event(Gesture.UNKNOWN))
             time.sleep(0.05)
             mock_exec.assert_not_called()
+
+    def test_custom_label_dispatches_profile_action(self):
+        action = ActionConfig(type="type", text="go")
+        profiles = {"default": {"panic_build": action}}
+        handler, vt = _make_handler(profiles=profiles)
+
+        with patch("pulse.handlers.recipe_handler.get_frontmost_app", return_value="default"), \
+             patch("pulse.handlers.recipe_handler._execute_action") as mock_exec:
+            handler(_custom_event("panic_build"))
+            time.sleep(0.05)
+            mock_exec.assert_called_once_with(action, vt)
 
     def test_rest_gesture_ignored(self):
         handler, _ = _make_handler()

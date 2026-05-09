@@ -71,8 +71,17 @@ Pulse runs as a macOS menu bar app. Click **Pulse** in the menu bar to see:
 | Ready | Armband connected, listening for gestures |
 | Recording… | Voice capture in progress |
 | Transcribing… | Whisper processing audio |
+| Retraining model… | Local gesture model is being updated |
 
-The last phrase you dictated is shown below the status line so you can confirm what was typed.
+The menu also shows your last detected gesture and the last action Pulse performed.
+
+Learning controls are local-only:
+
+| Item | Effect |
+|---|---|
+| Teach New Gesture… | Save recent EMG samples under a new gesture label |
+| Correct Last Gesture… | Relabel the latest EMG window after a bad prediction |
+| Retrain Model | Rebuild the personal classifier from `data/raw/` |
 
 ---
 
@@ -140,7 +149,19 @@ make train                # retrain
 make custom               # your new gesture is now live
 ```
 
-Custom gestures that aren't in the default vocabulary are emitted with `metadata["custom_label"]` so you can wire them to any action in `pulse/handlers/`.
+You can also teach or correct gestures from the menu bar. Hold the gesture, choose **Teach New Gesture…**, name it, then choose **Retrain Model**. For best adaptive learning, start with `make collect && make train`, then run Pulse with `make custom`. In custom mode, the model reloads after retraining. If you started with `make run`, restart with `make custom` after retraining.
+
+Custom gestures that aren't in the default vocabulary are emitted with `metadata["custom_label"]`, and recipe mode can bind them directly:
+
+```yaml
+profiles:
+  default:
+    pinch:
+      action: key
+      keys: [cmd, b]
+```
+
+All learning data stays local in `data/raw/`, and trained models stay local in `models/`.
 
 ---
 
@@ -185,6 +206,8 @@ PulseCLI/
 │   ├── gestures.py                 Gesture enum
 │   ├── config.py                   pulse.yaml parser + dataclasses
 │   ├── frontmost_app.py            macOS frontmost app detection
+│   ├── learning.py                 local adaptive gesture sample saving
+│   ├── training.py                 reusable Random Forest training
 │   ├── voice_recorder.py           mic capture + Whisper transcription
 │   ├── emg/
 │   │   └── features.py             EMG signal feature extraction
@@ -198,6 +221,7 @@ PulseCLI/
 │   └── train.py                    gesture classifier training
 └── tests/
     ├── test_config.py              config parser tests
+    ├── test_learning.py            local learning tests
     └── test_recipe.py              recipe handler tests
 ```
 

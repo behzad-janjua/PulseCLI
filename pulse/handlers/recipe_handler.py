@@ -97,8 +97,8 @@ class RecipeHandler:
         self._lock = threading.Lock()
 
     def __call__(self, event: GestureEvent) -> None:
-        gesture_name = event.gesture.value
-        if gesture_name in (Gesture.UNKNOWN.value, Gesture.REST.value):
+        gesture_name = _gesture_name(event)
+        if gesture_name is None:
             return
 
         with self._lock:
@@ -171,3 +171,12 @@ class RecipeHandler:
         action = profile.get(gesture_name)
         if action:
             _execute_action(action, self._voice_trigger)
+
+
+def _gesture_name(event: GestureEvent) -> str | None:
+    if event.gesture == Gesture.UNKNOWN:
+        custom_label = event.metadata.get("custom_label")
+        return str(custom_label) if custom_label else None
+    if event.gesture == Gesture.REST:
+        return None
+    return event.gesture.value
