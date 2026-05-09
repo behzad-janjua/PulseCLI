@@ -35,6 +35,7 @@ class MyoReader:
         self._myo = Myo(mode=emg_mode.FILTERED)
 
     def _on_pose(self, pose: Pose) -> None:
+        print(f"[RAW] pose callback fired: {pose!r}")  # temp debug
         if self._discover:
             # Print raw pyomyo values so you can verify POSE_MAP is correct.
             print(f"[DISCOVER] {pose!r}  type={type(pose).__name__}")
