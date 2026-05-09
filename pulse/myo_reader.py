@@ -1,7 +1,10 @@
 import logging
 import sys
 import time
+from collections import deque
+from pathlib import Path
 
+import numpy as np
 from pyomyo import Myo, Pose, emg_mode
 
 from pulse.dispatcher import Dispatcher
@@ -12,9 +15,6 @@ logger = logging.getLogger(__name__)
 
 DEBOUNCE_SECONDS = 0.5
 
-# Maps pyomyo's Pose enum to our Gesture enum.
-# If gestures always log as UNKNOWN, run `python main.py --discover`
-# to print the raw pose values and update this map.
 POSE_MAP: dict[Pose, Gesture] = {
     Pose.REST: Gesture.REST,
     Pose.FIST: Gesture.FIST,
@@ -25,32 +25,101 @@ POSE_MAP: dict[Pose, Gesture] = {
     Pose.UNKNOWN: Gesture.UNKNOWN,
 }
 
+MODEL_DIR    = Path(__file__).parent.parent / "models"
+WINDOW_SIZE  = 60   # samples (~300ms at 200Hz)
+STEP_SIZE    = 30   # predict every ~150ms
+
+
+def _load_custom_classifier():
+    clf_path = MODEL_DIR / "gesture_classifier.pkl"
+    le_path  = MODEL_DIR / "label_encoder.pkl"
+    if not clf_path.exists():
+        return None, None
+    import joblib
+    clf = joblib.load(clf_path)
+    le  = joblib.load(le_path)
+    logger.info("Custom classifier loaded from models/")
+    return clf, le
+
 
 class MyoReader:
-    def __init__(self, dispatcher: Dispatcher, discover: bool = False) -> None:
-        self._dispatcher = dispatcher
-        self._discover = discover
+    def __init__(
+        self,
+        dispatcher: Dispatcher,
+        discover: bool = False,
+        use_custom: bool = False,
+    ) -> None:
+        self._dispatcher  = dispatcher
+        self._discover    = discover
+        self._use_custom  = use_custom
         self._last_gesture: Gesture | None = None
         self._last_time: float = 0.0
-        self._myo = Myo(mode=emg_mode.FILTERED)
+
+        # EMG rolling buffer — used in both custom and hardware modes
+        self._emg_buffer: deque = deque(maxlen=WINDOW_SIZE)
+        self._emg_step_count: int = 0
+
+        if use_custom:
+            self._clf, self._le = _load_custom_classifier()
+            if self._clf is None:
+                logger.error("No trained model found. Run `make train` first.")
+                sys.exit(1)
+            self._myo = Myo(mode=emg_mode.RAW)
+        else:
+            self._clf, self._le = None, None
+            self._myo = Myo(mode=emg_mode.FILTERED)
+
+    def _emit(self, gesture: Gesture, metadata: dict | None = None) -> None:
+        now = time.time()
+        if gesture == self._last_gesture and (now - self._last_time) < DEBOUNCE_SECONDS:
+            return
+        self._last_gesture = gesture
+        self._last_time = now
+        self._dispatcher.dispatch(GestureEvent(gesture=gesture, metadata=metadata or {}))
 
     def _on_pose(self, pose: Pose) -> None:
+        if self._use_custom:
+            return  # hardware classifier disabled in custom mode
+
         if self._discover:
-            # Print raw pyomyo values so you can verify POSE_MAP is correct.
             print(f"[DISCOVER] {pose!r}  type={type(pose).__name__}")
             return
 
-        gesture = POSE_MAP.get(pose, Gesture.UNKNOWN)
-        now = time.time()
+        self._emit(POSE_MAP.get(pose, Gesture.UNKNOWN))
 
-        # Debounce: hardware fires the same pose repeatedly while held.
-        # Drop the event if it's the same gesture within the cooldown window.
-        if gesture == self._last_gesture and (now - self._last_time) < DEBOUNCE_SECONDS:
+    def _on_emg(self, emg: tuple, moving: int) -> None:
+        if self._discover:
             return
 
-        self._last_gesture = gesture
-        self._last_time = now
-        self._dispatcher.dispatch(GestureEvent(gesture=gesture))
+        self._emg_buffer.append(emg)
+        self._emg_step_count += 1
+
+        if not self._use_custom:
+            return
+
+        if (
+            len(self._emg_buffer) == WINDOW_SIZE
+            and self._emg_step_count >= STEP_SIZE
+        ):
+            self._emg_step_count = 0
+            self._predict_from_buffer()
+
+    def _predict_from_buffer(self) -> None:
+        from pulse.emg.features import extract_features
+
+        window = np.array(self._emg_buffer, dtype=np.float32)
+        features = extract_features(window).reshape(1, -1)
+        label = self._le.inverse_transform(self._clf.predict(features))[0]
+
+        try:
+            gesture = Gesture(label)
+            metadata = {}
+        except ValueError:
+            # Custom gesture not in the enum — carry the label in metadata
+            gesture = Gesture.UNKNOWN
+            metadata = {"custom_label": label}
+
+        self._emit(gesture, metadata)
 
     def start(self) -> None:
         try:
@@ -60,7 +129,10 @@ class MyoReader:
             sys.exit(1)
 
         self._myo.add_pose_handler(self._on_pose)
-        logger.info("MYO connected. Listening for gestures... (Ctrl+C to stop)")
+        self._myo.add_emg_handler(self._on_emg)
+
+        mode = "custom classifier" if self._use_custom else "hardware classifier"
+        logger.info("MYO connected [%s]. Listening... (Ctrl+C to stop)", mode)
 
         try:
             while True:

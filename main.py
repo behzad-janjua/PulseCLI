@@ -9,9 +9,10 @@ from pulse.voice_recorder import VoiceRecorder
 
 
 def main() -> None:
-    discover = "--discover" in sys.argv
+    discover    = "--discover" in sys.argv
+    use_custom  = "--custom"   in sys.argv
 
-    recorder = VoiceRecorder(model_size="base")
+    recorder     = VoiceRecorder(model_size="base")
     voice_trigger = VoiceTrigger(recorder)
 
     dispatcher = Dispatcher()
@@ -19,7 +20,7 @@ def main() -> None:
     dispatcher.register(voice_trigger)
     dispatcher.register(navigate)
 
-    reader = MyoReader(dispatcher, discover=discover)
+    reader = MyoReader(dispatcher, discover=discover, use_custom=use_custom)
     reader.start()
 
 
