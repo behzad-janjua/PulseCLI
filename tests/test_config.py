@@ -116,6 +116,56 @@ class TestLoadConfig(unittest.TestCase):
             load_config(p)
         p.unlink()
 
+    def test_focus_target_action(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                wave_out:
+                  action: focus_target
+                  target: claude_right
+        """)
+        cfg = load_config(p)
+        action = cfg.profiles["default"]["wave_out"]
+        self.assertEqual(action.type, "focus_target")
+        self.assertEqual(action.target, "claude_right")
+        p.unlink()
+
+    def test_save_target_action(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                fist:
+                  action: save_target
+                  target: my_window
+        """)
+        cfg = load_config(p)
+        action = cfg.profiles["default"]["fist"]
+        self.assertEqual(action.type, "save_target")
+        self.assertEqual(action.target, "my_window")
+        p.unlink()
+
+    def test_next_target_action(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                wave_out: next_target
+        """)
+        cfg = load_config(p)
+        action = cfg.profiles["default"]["wave_out"]
+        self.assertEqual(action.type, "next_target")
+        p.unlink()
+
+    def test_focus_target_missing_target_raises(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                wave_out:
+                  action: focus_target
+        """)
+        with self.assertRaises(ConfigError):
+            load_config(p)
+        p.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,7 +8,10 @@ import yaml
 
 CONFIG_PATH = Path("pulse.yaml")
 
-VALID_ACTIONS = {"dictate", "key", "type", "shell"}
+VALID_ACTIONS = {
+    "dictate", "key", "type", "shell",
+    "save_target", "focus_target", "next_target", "previous_target",
+}
 
 
 class ConfigError(ValueError):
@@ -21,6 +24,7 @@ class ActionConfig:
     keys: list[str] = field(default_factory=list)
     text: str = ""
     command: str = ""
+    target: str = ""
 
 
 @dataclass
@@ -56,11 +60,15 @@ def _parse_action(raw: Any, context: str) -> ActionConfig:
             f"{context}: unknown action '{action_type}'. Valid: {sorted(VALID_ACTIONS)}"
         )
 
+    if action_type in {"save_target", "focus_target"} and not raw.get("target"):
+        raise ConfigError(f"{context}: '{action_type}' requires a 'target' field")
+
     return ActionConfig(
         type=action_type,
         keys=raw.get("keys", []),
         text=raw.get("text", ""),
         command=raw.get("command", ""),
+        target=raw.get("target", ""),
     )
 
 

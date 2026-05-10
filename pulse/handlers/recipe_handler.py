@@ -12,6 +12,12 @@ from pulse.events import GestureEvent
 from pulse.frontmost_app import get_frontmost_app
 from pulse.gestures import Gesture
 from pulse.handlers.voice_trigger import VoiceTrigger
+from pulse.window_targets import (
+    focus_target as wt_focus,
+    next_target as wt_next,
+    previous_target as wt_previous,
+    save_target as wt_save,
+)
 
 if TYPE_CHECKING:
     pass
@@ -86,6 +92,34 @@ def _execute_action(action: ActionConfig, voice_trigger: VoiceTrigger) -> None:
                 )
             except Exception as exc:
                 print(f"{RED}[PULSE] shell error: {exc}{RESET}", flush=True)
+
+    elif action.type == "save_target":
+        if action.target:
+            ok = wt_save(action.target)
+            if ok:
+                print(f"{GREEN}[PULSE] saved target '{action.target}'{RESET}", flush=True)
+            else:
+                print(f"{RED}[PULSE] save_target: could not read frontmost window{RESET}", flush=True)
+
+    elif action.type == "focus_target":
+        if action.target:
+            ok = wt_focus(action.target)
+            if not ok:
+                print(f"{YELLOW}[PULSE] focus_target '{action.target}' not found{RESET}", flush=True)
+
+    elif action.type == "next_target":
+        name = wt_next()
+        if name:
+            print(f"{GREEN}[PULSE] next target → {name}{RESET}", flush=True)
+        else:
+            print(f"{YELLOW}[PULSE] next_target: no targets saved{RESET}", flush=True)
+
+    elif action.type == "previous_target":
+        name = wt_previous()
+        if name:
+            print(f"{GREEN}[PULSE] previous target → {name}{RESET}", flush=True)
+        else:
+            print(f"{YELLOW}[PULSE] previous_target: no targets saved{RESET}", flush=True)
 
 
 class RecipeHandler:
