@@ -92,7 +92,7 @@ class PulseApp(rumps.App):
         with self._lock:
             self._gesture = gesture
 
-    _SNAPSHOT_EXCLUDED = {“Python”, “python3”, “python”, “Pulse”}
+    _SNAPSHOT_EXCLUDED = {"Python", "python3", "python", "Pulse"}
 
     def _tick(self, _) -> None:
         with self._lock:
@@ -102,9 +102,9 @@ class PulseApp(rumps.App):
 
         self._status_item.title = _STATE_LABEL.get(state, state.title())
         if gesture is not None:
-            self._gesture_item.title = f”Last gesture: {_truncate(gesture)}”
+            self._gesture_item.title = f"Last gesture: {_truncate(gesture)}"
         if action is not None:
-            self._action_item.title = f”↩  “{_truncate(action)}””
+            self._action_item.title = f'↩  "{_truncate(action)}"'
 
         self._tick_count += 1
         if self._tick_count % 5 == 0:
@@ -128,10 +128,12 @@ class PulseApp(rumps.App):
         items = []
         for name, wt in targets.items():
             label = f"{name}  ({wt.app})"
-            item = rumps.MenuItem(label, callback=self._make_focus_cb(name))
-            items.append(item)
-        items.append(rumps.separator)
-        items.append(rumps.MenuItem("Delete Target…", callback=self._delete_target))
+            submenu = rumps.MenuItem(label)
+            submenu.update([
+                rumps.MenuItem("Focus", callback=self._make_focus_cb(name)),
+                rumps.MenuItem("Delete", callback=self._make_delete_cb(name)),
+            ])
+            items.append(submenu)
         self._targets_item.update(items)
 
     def _make_focus_cb(self, name: str):
@@ -139,6 +141,15 @@ class PulseApp(rumps.App):
             ok = focus_target(name)
             if not ok:
                 rumps.alert(f"Target '{name}' not found.\nIt may have been closed.", ok="OK")
+        return _cb
+
+    def _make_delete_cb(self, name: str):
+        def _cb(_):
+            ok = delete_target(name)
+            if ok:
+                self._queue_action(f"Deleted target: {name}")
+            else:
+                rumps.alert(f"Target '{name}' not found.", ok="OK")
         return _cb
 
     def _save_window_as(self, _) -> None:
@@ -167,30 +178,6 @@ class PulseApp(rumps.App):
             self._queue_action(f"Saved target: {name}")
         else:
             rumps.alert(f"Could not save target '{name}'.", ok="OK")
-
-    def _delete_target(self, _) -> None:
-        targets = list_targets()
-        if not targets:
-            rumps.alert("No targets saved.", ok="OK")
-            return
-        names = ", ".join(targets.keys())
-        response = rumps.Window(
-            message=f"Saved targets: {names}\n\nEnter a name to delete:",
-            title="Delete Target",
-            default_text="",
-            ok="Delete",
-            cancel="Cancel",
-        ).run()
-        if not response.clicked:
-            return
-        name = response.text.strip()
-        if not name:
-            return
-        ok = delete_target(name)
-        if ok:
-            self._queue_action(f"Deleted target: {name}")
-        else:
-            rumps.alert(f"Target '{name}' not found.", ok="OK")
 
     def _teach_gesture(self, _) -> None:
         label = self._prompt_label(
