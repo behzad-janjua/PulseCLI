@@ -58,7 +58,7 @@ Context:
 - uncommitted changes: yes
 ```
 
-Save targets from the menu bar or via a `save_target` gesture. Targets persist across restarts in `.pulse_targets.yaml`.
+Save targets from the menu bar or via a `save_target` gesture. Targets persist across restarts in `~/Library/Application Support/Pulse/targets.yaml`.
 
 ---
 
