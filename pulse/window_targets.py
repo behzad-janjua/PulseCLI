@@ -12,6 +12,8 @@ TARGETS_PATH = Path(".pulse_targets.yaml")
 logger = logging.getLogger(__name__)
 
 _current_target: str | None = None
+_active_set: str | None = None
+_focus_sets: dict[str, list[str]] = {}
 
 
 @dataclass
@@ -149,10 +151,40 @@ def list_targets() -> dict[str, WindowTarget]:
     return result
 
 
+def configure_focus_sets(sets: dict[str, list[str]]) -> None:
+    global _focus_sets
+    _focus_sets = sets
+
+
+def set_focus_set(name: str | None) -> bool:
+    """Activate a named focus set, or clear it (pass None / 'all' / '')."""
+    global _active_set
+    if not name or name == "all":
+        _active_set = None
+        return True
+    if name not in _focus_sets:
+        logger.warning("set_focus_set: '%s' not defined in focus_sets", name)
+        return False
+    _active_set = name
+    return True
+
+
+def get_active_set() -> str | None:
+    return _active_set
+
+
+def _cycle_keys() -> list[str]:
+    """Return the ordered target names to cycle through, respecting the active focus set."""
+    all_keys = list(_load_raw().keys())
+    if _active_set is None or _active_set not in _focus_sets:
+        return all_keys
+    return [k for k in _focus_sets[_active_set] if k in all_keys]
+
+
 def next_target() -> str | None:
     """Focus the next saved target cyclically. Returns the target name."""
     global _current_target
-    keys = list(_load_raw().keys())
+    keys = _cycle_keys()
     if not keys:
         return None
     if _current_target is None or _current_target not in keys:
@@ -166,7 +198,7 @@ def next_target() -> str | None:
 def previous_target() -> str | None:
     """Focus the previous saved target cyclically. Returns the target name."""
     global _current_target
-    keys = list(_load_raw().keys())
+    keys = _cycle_keys()
     if not keys:
         return None
     if _current_target is None or _current_target not in keys:

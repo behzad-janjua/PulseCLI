@@ -8,12 +8,15 @@ from unittest.mock import patch
 import pulse.window_targets as wt
 from pulse.window_targets import (
     WindowTarget,
+    configure_focus_sets,
     delete_target,
     focus_target,
+    get_active_set,
     list_targets,
     next_target,
     previous_target,
     save_target,
+    set_focus_set,
 )
 
 
@@ -24,8 +27,12 @@ def _use_temp_targets(test_fn):
             path = Path(tmpdir) / ".pulse_targets.yaml"
             with patch.object(wt, "TARGETS_PATH", path):
                 wt._current_target = None
+                wt._active_set = None
+                wt._focus_sets = {}
                 test_fn(self)
                 wt._current_target = None
+                wt._active_set = None
+                wt._focus_sets = {}
     wrapper.__name__ = test_fn.__name__
     return wrapper
 
@@ -158,6 +165,96 @@ class TestNextPreviousTarget(unittest.TestCase):
         with patch.object(wt, "_run_script", return_value=""):
             n = next_target()
         self.assertEqual(n, "x")
+
+
+class TestFocusSets(unittest.TestCase):
+    @_use_temp_targets
+    def test_set_focus_set_activates_known_set(self):
+        configure_focus_sets({"coding": ["a", "b"]})
+        ok = set_focus_set("coding")
+        self.assertTrue(ok)
+        self.assertEqual(get_active_set(), "coding")
+
+    @_use_temp_targets
+    def test_set_focus_set_unknown_returns_false(self):
+        configure_focus_sets({"coding": ["a", "b"]})
+        ok = set_focus_set("nonexistent")
+        self.assertFalse(ok)
+        self.assertIsNone(get_active_set())
+
+    @_use_temp_targets
+    def test_set_focus_set_none_clears(self):
+        configure_focus_sets({"coding": ["a", "b"]})
+        set_focus_set("coding")
+        set_focus_set(None)
+        self.assertIsNone(get_active_set())
+
+    @_use_temp_targets
+    def test_set_focus_set_all_clears(self):
+        configure_focus_sets({"coding": ["a", "b"]})
+        set_focus_set("coding")
+        set_focus_set("all")
+        self.assertIsNone(get_active_set())
+
+    @_use_temp_targets
+    def test_next_target_respects_focus_set(self):
+        save_target("a", WindowTarget(app="A", title=""))
+        save_target("b", WindowTarget(app="B", title=""))
+        save_target("c", WindowTarget(app="C", title=""))
+        configure_focus_sets({"coding": ["a", "c"]})
+        set_focus_set("coding")
+
+        with patch.object(wt, "_run_script", return_value=""):
+            n1 = next_target()
+            n2 = next_target()
+            n3 = next_target()
+
+        self.assertEqual(n1, "a")
+        self.assertEqual(n2, "c")
+        self.assertEqual(n3, "a")  # wraps within set
+
+    @_use_temp_targets
+    def test_previous_target_respects_focus_set(self):
+        save_target("a", WindowTarget(app="A", title=""))
+        save_target("b", WindowTarget(app="B", title=""))
+        save_target("c", WindowTarget(app="C", title=""))
+        configure_focus_sets({"coding": ["a", "c"]})
+        set_focus_set("coding")
+
+        with patch.object(wt, "_run_script", return_value=""):
+            p1 = previous_target()
+            p2 = previous_target()
+
+        self.assertEqual(p1, "c")  # starts at end of set
+        self.assertEqual(p2, "a")
+
+    @_use_temp_targets
+    def test_focus_set_skips_missing_targets(self):
+        save_target("a", WindowTarget(app="A", title=""))
+        # "ghost" is in the set but not saved as a target
+        configure_focus_sets({"coding": ["a", "ghost"]})
+        set_focus_set("coding")
+
+        with patch.object(wt, "_run_script", return_value=""):
+            n = next_target()
+
+        self.assertEqual(n, "a")
+
+    @_use_temp_targets
+    def test_clearing_set_restores_all_targets(self):
+        save_target("a", WindowTarget(app="A", title=""))
+        save_target("b", WindowTarget(app="B", title=""))
+        save_target("c", WindowTarget(app="C", title=""))
+        configure_focus_sets({"coding": ["a"]})
+        set_focus_set("coding")
+        set_focus_set(None)
+
+        with patch.object(wt, "_run_script", return_value=""):
+            n1 = next_target()
+            n2 = next_target()
+            n3 = next_target()
+
+        self.assertEqual([n1, n2, n3], ["a", "b", "c"])
 
 
 if __name__ == "__main__":

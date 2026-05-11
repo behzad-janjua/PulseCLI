@@ -11,6 +11,7 @@ CONFIG_PATH = Path("pulse.yaml")
 VALID_ACTIONS = {
     "dictate", "key", "type", "shell",
     "save_target", "focus_target", "next_target", "previous_target", "pick_target",
+    "set_focus_set",
     "context_type", "context_dictate",
 }
 
@@ -38,6 +39,7 @@ class SequenceConfig:
 class PulseConfig:
     profiles: dict[str, dict[str, ActionConfig]]
     sequences: list[SequenceConfig]
+    focus_sets: dict[str, list[str]] = field(default_factory=dict)
 
 
 def _parse_action(raw: Any, context: str) -> ActionConfig:
@@ -124,4 +126,13 @@ def load_config(path: Path = CONFIG_PATH) -> PulseConfig | None:
 
     sequences = [_parse_sequence(s, i) for i, s in enumerate(sequences_raw)]
 
-    return PulseConfig(profiles=profiles, sequences=sequences)
+    focus_sets_raw = raw.get("focus_sets", {})
+    if not isinstance(focus_sets_raw, dict):
+        raise ConfigError("'focus_sets' must be a mapping")
+    focus_sets: dict[str, list[str]] = {}
+    for set_name, members in focus_sets_raw.items():
+        if not isinstance(members, list):
+            raise ConfigError(f"focus_sets.{set_name}: value must be a list of target names")
+        focus_sets[set_name] = [str(m) for m in members]
+
+    return PulseConfig(profiles=profiles, sequences=sequences, focus_sets=focus_sets)

@@ -166,6 +166,53 @@ class TestLoadConfig(unittest.TestCase):
             load_config(p)
         p.unlink()
 
+    def test_focus_sets_parsed(self):
+        p = _write_yaml("""
+            profiles: {}
+            focus_sets:
+              coding:
+                - Cursor
+                - Terminal
+                - claude_left
+        """)
+        cfg = load_config(p)
+        self.assertEqual(cfg.focus_sets, {"coding": ["Cursor", "Terminal", "claude_left"]})
+        p.unlink()
+
+    def test_focus_sets_defaults_to_empty(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                fist: dictate
+        """)
+        cfg = load_config(p)
+        self.assertEqual(cfg.focus_sets, {})
+        p.unlink()
+
+    def test_focus_sets_invalid_raises(self):
+        p = _write_yaml("""
+            profiles: {}
+            focus_sets:
+              coding: not_a_list
+        """)
+        with self.assertRaises(ConfigError):
+            load_config(p)
+        p.unlink()
+
+    def test_set_focus_set_action(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                wave_out:
+                  action: set_focus_set
+                  target: coding
+        """)
+        cfg = load_config(p)
+        action = cfg.profiles["default"]["wave_out"]
+        self.assertEqual(action.type, "set_focus_set")
+        self.assertEqual(action.target, "coding")
+        p.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

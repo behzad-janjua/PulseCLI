@@ -17,6 +17,8 @@ from pulse.window_targets import (
     next_target as wt_next,
     previous_target as wt_previous,
     save_target as wt_save,
+    set_focus_set as wt_set_focus_set,
+    get_active_set as wt_get_active_set,
 )
 
 if TYPE_CHECKING:
@@ -124,6 +126,16 @@ def _execute_action(action: ActionConfig, voice_trigger: VoiceTrigger) -> None:
     elif action.type == "pick_target":
         from pulse.target_picker import launch_picker
         launch_picker()
+
+    elif action.type == "set_focus_set":
+        set_name = action.target or None
+        ok = wt_set_focus_set(set_name)
+        active = wt_get_active_set()
+        if ok:
+            label = active if active else "all targets"
+            print(f"{GREEN}[PULSE] focus set → {label}{RESET}", flush=True)
+        else:
+            print(f"{YELLOW}[PULSE] set_focus_set: '{set_name}' not defined{RESET}", flush=True)
 
     elif action.type == "context_type":
         from pulse.prompt_context import compose_prompt

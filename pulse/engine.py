@@ -20,11 +20,12 @@ class PulseEngine:
     """Owns all hardware and audio components. The UI talks only to this."""
 
     def __init__(self, discover: bool = False, use_custom: bool = False) -> None:
-        self._state_cb:  Callable[[str], None] = lambda _: None
-        self._action_cb: Callable[[str], None] = lambda _: None
-        self._gesture_cb: Callable[[str], None] = lambda _: None
+        self._state_cb:   Callable[[str], None] = lambda _: None
+        self._action_cb:  Callable[[str], None] = lambda _: None
+        self._gesture_cb: Callable[[str, float | None], None] = lambda l, c: None
         self._last_gesture: str | None = None
         self._learning = LearningService()
+        self._config = None
 
         self._recorder      = VoiceRecorder(model_size="base")
         self._voice_trigger = VoiceTrigger(
@@ -37,8 +38,11 @@ class PulseEngine:
         dispatcher.register(log_event)
 
         config = load_config()
+        self._config = config
         if config is not None:
             from pulse.handlers.recipe_handler import RecipeHandler
+            from pulse.window_targets import configure_focus_sets
+            configure_focus_sets(config.focus_sets)
             dispatcher.register(RecipeHandler(config, self._voice_trigger))
             print("[PULSE] recipe mode — pulse.yaml loaded", flush=True)
         else:
@@ -62,8 +66,8 @@ class PulseEngine:
         """Register a callback that receives the last transcribed text."""
         self._action_cb = callback
 
-    def on_gesture(self, callback: Callable[[str], None]) -> None:
-        """Register a callback that receives the last detected gesture label."""
+    def on_gesture(self, callback: Callable[[str, float | None], None]) -> None:
+        """Register a callback that receives (gesture_label, confidence | None)."""
         self._gesture_cb = callback
 
     def start(self) -> None:
@@ -81,6 +85,23 @@ class PulseEngine:
         if self._myo_thread is not None:
             self._myo_thread.join(timeout=3.0)
         self._voice_trigger.close()
+
+    @property
+    def use_custom(self) -> bool:
+        return self._reader.use_custom
+
+    @property
+    def needs_retrain(self) -> bool:
+        return self._reader.needs_retrain
+
+    def get_active_profile(self, app: str) -> str | None:
+        if self._config is None:
+            return None
+        if app in self._config.profiles:
+            return app
+        if "default" in self._config.profiles:
+            return "default"
+        return None
 
     def get_last_gesture(self) -> str | None:
         return self._last_gesture or self._reader.get_last_gesture_label()
@@ -107,7 +128,7 @@ class PulseEngine:
         self._on_state("retraining")
         try:
             result = self._learning.retrain()
-            reloaded = self._reader.reload_classifier()
+            reloaded = self._reader.reload_classifier()  # also calls reset_retrain_flag
             suffix = "" if reloaded else " (restart with make custom)"
             self._on_action(
                 f"Model updated: {len(result.classes)} gestures, {result.samples} windows{suffix}"
@@ -122,6 +143,6 @@ class PulseEngine:
     def _on_action(self, text: str) -> None:
         self._action_cb(text)
 
-    def _on_gesture(self, label: str) -> None:
+    def _on_gesture(self, label: str, confidence: float | None = None) -> None:
         self._last_gesture = label
-        self._gesture_cb(label)
+        self._gesture_cb(label, confidence)
