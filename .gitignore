@@ -8,5 +8,6 @@ dist/
 build/
 *.egg-info/
 .DS_Store
+.pulse_targets.yaml
 data/raw/
 models/
