@@ -175,3 +175,8 @@ def previous_target() -> str | None:
         name = keys[(keys.index(_current_target) - 1) % len(keys)]
     focus_target(name)
     return name
+
+
+def get_current_target() -> str | None:
+    """Return the name of the most recently focused target."""
+    return _current_target

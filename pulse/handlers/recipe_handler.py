@@ -121,6 +121,10 @@ def _execute_action(action: ActionConfig, voice_trigger: VoiceTrigger) -> None:
         else:
             print(f"{YELLOW}[PULSE] previous_target: no targets saved{RESET}", flush=True)
 
+    elif action.type == "pick_target":
+        from pulse.target_picker import launch_picker
+        launch_picker()
+
     elif action.type == "context_type":
         from pulse.prompt_context import compose_prompt
         prompt = compose_prompt(action.text, action.target or None)
