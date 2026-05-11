@@ -11,6 +11,7 @@ CONFIG_PATH = Path("pulse.yaml")
 VALID_ACTIONS = {
     "dictate", "key", "type", "shell",
     "save_target", "focus_target", "next_target", "previous_target",
+    "context_type", "context_dictate",
 }
 
 

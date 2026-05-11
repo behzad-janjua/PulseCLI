@@ -26,6 +26,14 @@ class VoiceTrigger:
         self._recording  = False
         self._worker: threading.Thread | None = None
         self._claude_proc: subprocess.Popen | None = None
+        self._with_context: bool = False
+        self._context_target: str | None = None
+
+    def toggle_with_context(self, target: str | None = None) -> None:
+        """Like toggle(), but appends a Context block to the transcribed text."""
+        self._with_context = True
+        self._context_target = target
+        self.toggle()
 
     def toggle(self) -> None:
         """Start or stop recording. Called by RecipeHandler for 'dictate' actions."""
@@ -59,6 +67,11 @@ class VoiceTrigger:
             self._handle_interrupt()
 
     def _transcribe_and_send(self) -> None:
+        with_context = self._with_context
+        context_target = self._context_target
+        self._with_context = False
+        self._context_target = None
+
         text = self._recorder.stop_and_transcribe()
         self._on_state("connected")
 
@@ -66,7 +79,11 @@ class VoiceTrigger:
             print(f"{RED}[PULSE] no speech detected{RESET}", flush=True)
             return
 
-        print(f"{GREEN}[PULSE] → \"{text}\"{RESET}", flush=True)
+        if with_context:
+            from pulse.prompt_context import compose_prompt
+            text = compose_prompt(text, context_target)
+
+        print(f"{GREEN}[PULSE] → \"{text[:80]}{'...' if len(text) > 80 else ''}\"{RESET}", flush=True)
         self._on_action(text)
         _keyboard.type(text)
 

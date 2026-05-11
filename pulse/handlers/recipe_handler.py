@@ -121,6 +121,14 @@ def _execute_action(action: ActionConfig, voice_trigger: VoiceTrigger) -> None:
         else:
             print(f"{YELLOW}[PULSE] previous_target: no targets saved{RESET}", flush=True)
 
+    elif action.type == "context_type":
+        from pulse.prompt_context import compose_prompt
+        prompt = compose_prompt(action.text, action.target or None)
+        _keyboard.type(prompt)
+
+    elif action.type == "context_dictate":
+        voice_trigger.toggle_with_context(action.target or None)
+
 
 class RecipeHandler:
     def __init__(self, config: PulseConfig, voice_trigger: VoiceTrigger) -> None:

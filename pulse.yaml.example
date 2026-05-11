@@ -2,10 +2,25 @@
 # Copy to pulse.yaml to activate. Delete pulse.yaml to fall back to default behaviour.
 #
 # Action types:
-#   dictate          — toggle voice recording (FIST behaviour)
-#   key: [...]       — hold modifier keys and tap the last key
-#   type: "text"     — type a literal string at the cursor
-#   shell: "cmd"     — run a shell command in the background
+#   dictate                    — toggle voice recording (FIST behaviour)
+#   key: [...]                 — hold modifier keys and tap the last key
+#   type: "text"               — type a literal string at the cursor
+#   shell: "cmd"               — run a shell command in the background
+#   context_type: "text"       — type text + auto-appended context block (cwd, branch, app, target)
+#   context_dictate            — like dictate, but the transcribed text gains a context block
+#
+# Prompt context:
+#   Both context_type and context_dictate append a block like:
+#
+#     Context:
+#     - target: claude_left
+#     - app: Terminal
+#     - cwd: PulseCLI
+#     - branch: feature/my-branch
+#     - uncommitted changes: yes
+#
+#   The optional `target` field names which Claude session / window to address.
+#   When omitted, only app/cwd/git context is included.
 
 profiles:
   # "default" applies when no app-specific profile matches the frontmost window.
@@ -29,6 +44,17 @@ profiles:
     wave_out:
       action: key
       keys: [cmd, tab]
+    fingers_spread:
+      action: context_type
+      target: claude_left
+      text: "Review the current implementation and find bugs."
+    thumb_to_pinky:
+      action: context_type
+      target: claude_right
+      text: "Propose tests for the current change."
+    pinch:
+      action: context_dictate
+      target: claude_left
 
   Xcode:
     fist:
