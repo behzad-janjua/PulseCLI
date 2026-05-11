@@ -86,6 +86,8 @@ class PulseApp(rumps.App):
         self._lock   = threading.Lock()
 
         self._snapshot_window: WindowTarget | None = None
+        self._cached_frontmost_app: str = ""
+        self._bg_refreshing: bool = False
         self._tick_count = 0
         self._hud: HUD | None = None
 
@@ -134,17 +136,25 @@ class PulseApp(rumps.App):
 
         self._tick_count += 1
         if self._tick_count % 5 == 0:
-            self._refresh_snapshot()
-            self._refresh_targets_menu()
-            self._refresh_diagnostics()
+            self._refresh_targets_menu()    # fast: YAML read + rumps UI
+            self._refresh_diagnostics()     # fast: uses cached app name
+            if not self._bg_refreshing:     # slow osascript — background only
+                self._bg_refreshing = True
+                threading.Thread(target=self._bg_refresh, daemon=True).start()
 
-    def _refresh_snapshot(self) -> None:
+    def _bg_refresh(self) -> None:
+        """Background thread: runs slow osascript calls and caches results."""
         try:
             w = get_frontmost_window()
-            if w and w.app not in self._SNAPSHOT_EXCLUDED:
-                self._snapshot_window = w
+            app = get_frontmost_app()
+            with self._lock:
+                if w and w.app not in self._SNAPSHOT_EXCLUDED:
+                    self._snapshot_window = w
+                self._cached_frontmost_app = app or ""
         except Exception:
             pass
+        finally:
+            self._bg_refreshing = False
 
     def _refresh_targets_menu(self) -> None:
         targets = list_targets()
@@ -167,7 +177,8 @@ class PulseApp(rumps.App):
         target = get_current_target()
         self._target_item.title = f"Target: {target}" if target else "Target: none"
 
-        app = get_frontmost_app() or ""
+        with self._lock:
+            app = self._cached_frontmost_app
         profile = self._engine.get_active_profile(app) if app else None
         self._profile_item.title = f"Profile: {profile}" if profile else "Profile: none"
 
@@ -202,7 +213,8 @@ class PulseApp(rumps.App):
         return _cb
 
     def _save_window_as(self, _) -> None:
-        window = self._snapshot_window
+        with self._lock:
+            window = self._snapshot_window
         if window is None:
             rumps.alert(
                 "No window captured yet.\n\nTip: use a gesture with action: save_target so Pulse can capture the window before the menu opens.",
