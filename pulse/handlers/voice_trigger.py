@@ -28,6 +28,7 @@ class VoiceTrigger:
         self._claude_proc: subprocess.Popen | None = None
         self._with_context: bool = False
         self._context_target: str | None = None
+        self._last_lock = threading.Lock()
         self._last_raw: str | None = None
         self._last_typed: str | None = None
 
@@ -69,8 +70,8 @@ class VoiceTrigger:
             self._handle_interrupt()
 
     def get_last_dictation(self) -> tuple[str | None, str | None]:
-        """Return (raw_transcript, typed_text) from the most recent dictation."""
-        return self._last_raw, self._last_typed
+        with self._last_lock:
+            return self._last_raw, self._last_typed
 
     def _transcribe_and_send(self) -> None:
         with_context = self._with_context
@@ -87,8 +88,9 @@ class VoiceTrigger:
 
         from pulse.dictionary import apply_dictionary
         corrected = apply_dictionary(raw)
-        self._last_raw = raw
-        self._last_typed = corrected
+        with self._last_lock:
+            self._last_raw = raw
+            self._last_typed = corrected
 
         text = corrected
         if with_context:
