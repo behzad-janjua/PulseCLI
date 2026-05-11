@@ -58,6 +58,21 @@ class TestApplyDictionary(unittest.TestCase):
         result = apply_dictionary("nothing to replace here")
         self.assertEqual(result, "nothing to replace here")
 
+    @_use_temp_dict
+    def test_correction_does_not_match_within_word(self):
+        # "pi" → "py" must not corrupt "aspirin" or "spin"
+        add_correction("pi", "py")
+        result = apply_dictionary("aspirin and spin use pi")
+        self.assertEqual(result, "aspirin and spin use py")
+
+    @_use_temp_dict
+    def test_correction_matches_at_sentence_boundaries(self):
+        # Word-boundary anchors must still fire at start/end of string and at punctuation.
+        add_correction("pi", "py")
+        self.assertEqual(apply_dictionary("pi"), "py")
+        self.assertEqual(apply_dictionary("pi."), "py.")
+        self.assertEqual(apply_dictionary("use pi, please"), "use py, please")
+
 
 class TestAddCorrection(unittest.TestCase):
     @_use_temp_dict

@@ -37,7 +37,10 @@ def apply_dictionary(text: str) -> str:
     ordered = sorted(corrections.items(), key=lambda kv: len(kv[0]), reverse=True)
     result = text
     for spoken, replacement in ordered:
-        result = re.sub(re.escape(spoken), lambda _: replacement, result, flags=re.IGNORECASE)
+        escaped = re.escape(spoken)
+        prefix = r'\b' if spoken and re.match(r'\w', spoken[0]) else ''
+        suffix = r'\b' if spoken and re.match(r'\w', spoken[-1]) else ''
+        result = re.sub(prefix + escaped + suffix, lambda _: replacement, result, flags=re.IGNORECASE)
     return result
 
 
