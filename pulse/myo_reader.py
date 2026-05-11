@@ -16,6 +16,10 @@ from pulse.gestures import Gesture
 logger = logging.getLogger(__name__)
 
 DEBOUNCE_SECONDS = 0.5
+CONFIDENCE_THRESHOLD = 0.60  # minimum winning-class probability to count a window
+VOTE_WINDOW = 3              # consecutive confident windows that must agree before emitting
+_RETRAIN_WINDOW = 15         # rolling window size for retrain detection
+_RETRAIN_THRESHOLD = 0.62    # avg raw confidence below this → needs_retrain
 
 POSE_MAP: dict[Pose, Gesture] = {
     Pose.REST: Gesture.REST,
@@ -59,7 +63,7 @@ class MyoReader:
         self._use_custom    = use_custom
         self._raw_emg_mode   = use_custom
         self._on_myo_state  = on_myo_state or (lambda s: None)
-        self._on_gesture    = on_gesture or (lambda s: None)
+        self._on_gesture    = on_gesture or (lambda s, c: None)
         self._stop_event    = threading.Event()
         self._last_gesture: Gesture | None = None
         self._last_label: str | None = None
@@ -70,6 +74,9 @@ class MyoReader:
         self._emg_buffer: deque = deque(maxlen=WINDOW_SIZE)
         self._learning_buffer: deque = deque(maxlen=LEARNING_BUFFER_SIZE)
         self._emg_step_count: int = 0
+        self._prediction_votes: deque = deque(maxlen=VOTE_WINDOW)
+        self._last_confidence: float | None = None
+        self._raw_confidence_window: deque = deque(maxlen=_RETRAIN_WINDOW)
 
         if use_custom:
             self._clf, self._le = _load_custom_classifier()
@@ -132,15 +139,27 @@ class MyoReader:
         with self._lock:
             window = np.array(self._emg_buffer, dtype=np.float32)
         features = extract_features(window).reshape(1, -1)
-        label = self._le.inverse_transform(self._clf.predict(features))[0]
+
+        proba = self._clf.predict_proba(features)[0]
+        confidence = float(proba.max())
+
+        if confidence < CONFIDENCE_THRESHOLD:
+            return
+
+        label = self._le.inverse_transform([int(proba.argmax())])[0]
+        self._prediction_votes.append(label)
+
+        if len(self._prediction_votes) < VOTE_WINDOW:
+            return
+        if len(set(self._prediction_votes)) != 1:
+            return
 
         try:
             gesture = Gesture(label)
-            metadata = {}
+            metadata = {"confidence": confidence}
         except ValueError:
-            # Custom gesture not in the enum — carry the label in metadata
             gesture = Gesture.UNKNOWN
-            metadata = {"custom_label": label}
+            metadata = {"custom_label": label, "confidence": confidence}
 
         self._emit(gesture, metadata)
 
@@ -168,6 +187,7 @@ class MyoReader:
         self._clf = clf
         self._le = le
         self._use_custom = True
+        self._prediction_votes.clear()
         logger.info("Custom classifier reloaded from models/")
         return True
 
