@@ -22,6 +22,7 @@ _focus_sets: dict[str, list[str]] = {}
 class WindowTarget:
     app: str
     title: str
+    bundle_id: str = ""
 
 
 def _run_script(script: str, timeout: float = 2.0) -> tuple[str, bool]:
@@ -42,20 +43,23 @@ def get_frontmost_window() -> WindowTarget | None:
         'tell application "System Events"\n'
         '    set frontApp to first application process whose frontmost is true\n'
         '    set appName to name of frontApp\n'
+        '    set bundleId to bundle identifier of frontApp\n'
+        '    if bundleId is missing value then set bundleId to ""\n'
         '    set winTitle to ""\n'
         '    try\n'
         '        set winTitle to name of front window of frontApp\n'
         '    end try\n'
-        '    return appName & "|||" & winTitle\n'
+        '    return appName & "|||" & bundleId & "|||" & winTitle\n'
         'end tell'
     )
     raw, _ = _run_script(script)
     if not raw or "|||" not in raw:
         return None
-    parts = raw.split("|||", 1)
-    app = parts[0].strip()
-    title = parts[1].strip()
-    return WindowTarget(app=app, title=title) if app else None
+    parts = raw.split("|||", 2)
+    app       = parts[0].strip()
+    bundle_id = parts[1].strip() if len(parts) > 1 else ""
+    title     = parts[2].strip() if len(parts) > 2 else ""
+    return WindowTarget(app=app, title=title, bundle_id=bundle_id) if app else None
 
 
 def _esc(s: str) -> str:
@@ -88,9 +92,9 @@ def save_target(name: str, window: WindowTarget | None = None) -> bool:
         logger.warning("save_target: could not determine frontmost window")
         return False
     targets = _load_raw()
-    targets[name] = {"app": window.app, "title": window.title}
+    targets[name] = {"app": window.app, "title": window.title, "bundle_id": window.bundle_id}
     _save_raw(targets)
-    logger.info("Saved target '%s': %s / %s", name, window.app, window.title)
+    logger.info("Saved target '%s': %s / %s [%s]", name, window.app, window.title, window.bundle_id or "no bundle id")
     return True
 
 
@@ -102,11 +106,32 @@ def focus_target(name: str) -> bool:
     if not entry:
         logger.warning("focus_target: '%s' not found in %s", name, TARGETS_PATH)
         return False
-    app = _esc(entry.get("app", ""))
-    title = _esc(entry.get("title", ""))
+    app       = _esc(entry.get("app", ""))
+    title     = _esc(entry.get("title", ""))
+    bundle_id = _esc(entry.get("bundle_id", ""))
     if not app:
         return False
-    if title:
+
+    if bundle_id and title:
+        # Preferred path: locate process by bundle ID (unambiguous even when two
+        # windows of the same app exist), then raise the window by exact title.
+        script = (
+            f'tell application "System Events"\n'
+            f'    set procs to every application process whose bundle identifier is "{bundle_id}"\n'
+            f'    if procs is {{}} then return "MISSING"\n'
+            f'    set proc to item 1 of procs\n'
+            f'    set frontmost of proc to true\n'
+            f'    try\n'
+            f'        set w to first window of proc whose name is "{title}"\n'
+            f'        perform action "AXRaise" of w\n'
+            f'    on error\n'
+            f'        return "MISSING"\n'
+            f'    end try\n'
+            f'end tell\n'
+            f'return "FOUND"'
+        )
+    elif title:
+        # Legacy entries (no bundle_id): fall back to process-name + substring match.
         script = (
             f'tell application "System Events"\n'
             f'    tell process "{app}"\n'
@@ -157,7 +182,11 @@ def list_targets() -> dict[str, WindowTarget]:
     result: dict[str, WindowTarget] = {}
     for name, entry in raw.items():
         if isinstance(entry, dict) and "app" in entry:
-            result[name] = WindowTarget(app=entry["app"], title=entry.get("title", ""))
+            result[name] = WindowTarget(
+                app=entry["app"],
+                title=entry.get("title", ""),
+                bundle_id=entry.get("bundle_id", ""),
+            )
     return result
 
 
@@ -192,31 +221,35 @@ def _cycle_keys() -> list[str]:
 
 
 def next_target() -> str | None:
-    """Focus the next saved target cyclically. Returns the target name."""
-    global _current_target
+    """Focus the next saved target cyclically, skipping stale ones.
+
+    Returns the name of the target that was successfully focused, or None if
+    every candidate in the cycle fails.
+    """
     keys = _cycle_keys()
     if not keys:
         return None
-    if _current_target is None or _current_target not in keys:
-        name = keys[0]
-    else:
-        name = keys[(keys.index(_current_target) + 1) % len(keys)]
-    focus_target(name)
-    return name
+    start = 0 if _current_target not in keys else (keys.index(_current_target) + 1) % len(keys)
+    for i in range(len(keys)):
+        if focus_target(keys[(start + i) % len(keys)]):
+            return keys[(start + i) % len(keys)]
+    return None
 
 
 def previous_target() -> str | None:
-    """Focus the previous saved target cyclically. Returns the target name."""
-    global _current_target
+    """Focus the previous saved target cyclically, skipping stale ones.
+
+    Returns the name of the target that was successfully focused, or None if
+    every candidate in the cycle fails.
+    """
     keys = _cycle_keys()
     if not keys:
         return None
-    if _current_target is None or _current_target not in keys:
-        name = keys[-1]
-    else:
-        name = keys[(keys.index(_current_target) - 1) % len(keys)]
-    focus_target(name)
-    return name
+    start = len(keys) - 1 if _current_target not in keys else (keys.index(_current_target) - 1) % len(keys)
+    for i in range(len(keys)):
+        if focus_target(keys[(start - i) % len(keys)]):
+            return keys[(start - i) % len(keys)]
+    return None
 
 
 def get_current_target() -> str | None:
