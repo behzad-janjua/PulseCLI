@@ -1,22 +1,24 @@
 .PHONY: run discover custom collect train install deps test
 
+PULSE = .venv/bin/pulse
+
 run:
-	.venv/bin/python3 main.py
+	$(PULSE) run
 
 discover:
-	.venv/bin/python3 main.py --discover
+	$(PULSE) discover
 
 custom:
-	.venv/bin/python3 main.py --custom
+	$(PULSE) custom
 
 collect:
-	.venv/bin/python3 scripts/collect.py
+	$(PULSE) collect
 
 add:
-	.venv/bin/python3 scripts/collect.py --add $(GESTURE)
+	$(PULSE) collect --add $(GESTURE)
 
 train:
-	.venv/bin/python3 scripts/train.py
+	$(PULSE) train
 
 deps:
 	brew install portaudio ffmpeg

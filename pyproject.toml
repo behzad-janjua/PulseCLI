@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pulse = "main:main"
+pulse = "pulse.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
