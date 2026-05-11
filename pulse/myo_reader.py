@@ -90,7 +90,8 @@ class MyoReader:
 
     def _emit(self, gesture: Gesture, metadata: dict | None = None) -> None:
         now = time.time()
-        label = (metadata or {}).get("custom_label") or gesture.value
+        meta = metadata or {}
+        label = meta.get("custom_label") or gesture.value
         if (
             gesture == self._last_gesture
             and label == self._last_label
@@ -100,8 +101,8 @@ class MyoReader:
         self._last_gesture = gesture
         self._last_label = label
         self._last_time = now
-        event = GestureEvent(gesture=gesture, metadata=metadata or {})
-        self._on_gesture(label)
+        event = GestureEvent(gesture=gesture, metadata=meta)
+        self._on_gesture(label, meta.get("confidence"))
         self._dispatcher.dispatch(event)
 
     def _on_pose(self, pose: Pose) -> None:
@@ -142,6 +143,8 @@ class MyoReader:
 
         proba = self._clf.predict_proba(features)[0]
         confidence = float(proba.max())
+        self._last_confidence = confidence
+        self._raw_confidence_window.append(confidence)
 
         if confidence < CONFIDENCE_THRESHOLD:
             return
@@ -178,6 +181,25 @@ class MyoReader:
                 return None
             return np.array(self._learning_buffer, dtype=np.float32)
 
+    @property
+    def use_custom(self) -> bool:
+        return self._use_custom
+
+    @property
+    def needs_retrain(self) -> bool:
+        win = self._raw_confidence_window
+        return (
+            len(win) >= _RETRAIN_WINDOW
+            and (sum(win) / len(win)) < _RETRAIN_THRESHOLD
+        )
+
+    def get_last_confidence(self) -> float | None:
+        return self._last_confidence
+
+    def reset_retrain_flag(self) -> None:
+        self._raw_confidence_window.clear()
+        self._last_confidence = None
+
     def reload_classifier(self) -> bool:
         if not self._raw_emg_mode:
             return False
@@ -188,6 +210,7 @@ class MyoReader:
         self._le = le
         self._use_custom = True
         self._prediction_votes.clear()
+        self.reset_retrain_flag()
         logger.info("Custom classifier reloaded from models/")
         return True
 

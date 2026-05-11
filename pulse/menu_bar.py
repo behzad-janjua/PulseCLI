@@ -6,10 +6,12 @@ from typing import TYPE_CHECKING
 import rumps
 
 from pulse.target_picker import launch_picker
+from pulse.frontmost_app import get_frontmost_app
 from pulse.window_targets import (
     WindowTarget,
     delete_target,
     focus_target,
+    get_current_target,
     get_frontmost_window,
     list_targets,
     save_target,
@@ -38,9 +40,12 @@ class PulseApp(rumps.App):
     def __init__(self, engine: PulseEngine) -> None:
         super().__init__("Pulse", quit_button=None)
 
-        self._status_item = rumps.MenuItem(_STATE_LABEL["disconnected"])
-        self._gesture_item = rumps.MenuItem("Last gesture: none")
-        self._action_item = rumps.MenuItem("No gesture yet")
+        self._status_item  = rumps.MenuItem(_STATE_LABEL["disconnected"])
+        self._target_item  = rumps.MenuItem("Target: none")
+        self._gesture_item = rumps.MenuItem("Gesture: none")
+        self._profile_item = rumps.MenuItem("Profile: —")
+        self._model_item   = rumps.MenuItem("Model: Hardware")
+        self._action_item  = rumps.MenuItem("No gesture yet")
 
         self._save_window_item = rumps.MenuItem(
             "Save Current Window As…", callback=self._save_window_as
@@ -55,7 +60,10 @@ class PulseApp(rumps.App):
         self.menu = [
             self._status_item,
             rumps.separator,
+            self._target_item,
             self._gesture_item,
+            self._profile_item,
+            self._model_item,
             self._action_item,
             rumps.separator,
             rumps.MenuItem("Teach New Gesture…", callback=self._teach_gesture),
@@ -73,6 +81,7 @@ class PulseApp(rumps.App):
         self._state  = "disconnected"
         self._action: str | None = None
         self._gesture: str | None = None
+        self._confidence: float | None = None
         self._lock   = threading.Lock()
 
         self._snapshot_window: WindowTarget | None = None
@@ -93,21 +102,26 @@ class PulseApp(rumps.App):
         with self._lock:
             self._action = text
 
-    def _queue_gesture(self, gesture: str) -> None:
+    def _queue_gesture(self, gesture: str, confidence: float | None = None) -> None:
         with self._lock:
             self._gesture = gesture
+            self._confidence = confidence
 
     _SNAPSHOT_EXCLUDED = {"Python", "python3", "python", "Pulse"}
 
     def _tick(self, _) -> None:
         with self._lock:
-            state  = self._state
-            action = self._action
-            gesture = self._gesture
+            state    = self._state
+            action   = self._action
+            gesture  = self._gesture
+            conf     = self._confidence
 
         self._status_item.title = _STATE_LABEL.get(state, state.title())
+
         if gesture is not None:
-            self._gesture_item.title = f"Last gesture: {_truncate(gesture)}"
+            conf_str = f" ({conf:.0%})" if conf is not None else ""
+            self._gesture_item.title = f"Gesture: {_truncate(gesture)}{conf_str}"
+
         if action is not None:
             self._action_item.title = f'↩  "{_truncate(action)}"'
 
@@ -115,6 +129,7 @@ class PulseApp(rumps.App):
         if self._tick_count % 5 == 0:
             self._refresh_snapshot()
             self._refresh_targets_menu()
+            self._refresh_diagnostics()
 
     def _refresh_snapshot(self) -> None:
         try:
@@ -140,6 +155,22 @@ class PulseApp(rumps.App):
             ])
             items.append(submenu)
         self._targets_item.update(items)
+
+    def _refresh_diagnostics(self) -> None:
+        target = get_current_target()
+        self._target_item.title = f"Target: {target}" if target else "Target: none"
+
+        app = get_frontmost_app() or ""
+        profile = self._engine.get_active_profile(app) if app else None
+        self._profile_item.title = f"Profile: {profile}" if profile else "Profile: none"
+
+        if self._engine.use_custom:
+            if self._engine.needs_retrain:
+                self._model_item.title = "Model: Custom  ⚠ retrain recommended"
+            else:
+                self._model_item.title = "Model: Custom"
+        else:
+            self._model_item.title = "Model: Hardware"
 
     def _make_focus_cb(self, name: str):
         def _cb(_):
