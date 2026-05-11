@@ -7,7 +7,9 @@ from pathlib import Path
 
 import yaml
 
-TARGETS_PATH = Path(".pulse_targets.yaml")
+TARGETS_PATH = (
+    Path.home() / "Library" / "Application Support" / "Pulse" / "targets.yaml"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +75,7 @@ def _load_raw() -> dict[str, dict]:
 
 
 def _save_raw(targets: dict[str, dict]) -> None:
+    TARGETS_PATH.parent.mkdir(parents=True, exist_ok=True)
     with TARGETS_PATH.open("w") as f:
         yaml.dump({"targets": targets}, f, default_flow_style=False)
 
