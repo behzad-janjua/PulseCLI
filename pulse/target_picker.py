@@ -235,10 +235,11 @@ def show_picker() -> str | None:
 
     panel, img_views = _build_window(targets, on_select)
 
-    # Wire close button to quit
-    panel.setDelegate_(
-        _PanelDelegate.alloc().initWithApp_(app)  # type: ignore[attr-defined]
-    )
+    # Wire close button to quit.
+    # The delegate must be held in a local so Python doesn't GC it —
+    # NSWindow.delegate is a weak reference on the Cocoa side.
+    delegate = _PanelDelegate.alloc().initWithApp_(app)  # type: ignore[attr-defined]
+    panel.setDelegate_(delegate)
 
     panel.makeKeyAndOrderFront_(None)
     app.activateIgnoringOtherApps_(True)
