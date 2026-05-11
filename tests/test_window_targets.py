@@ -79,7 +79,7 @@ class TestFocusTarget(unittest.TestCase):
     @_use_temp_targets
     def test_focus_existing_calls_applescript(self):
         save_target("left", WindowTarget(app="claude", title="left"))
-        with patch.object(wt, "_run_script", return_value=("", True)) as mock_script:
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)) as mock_script:
             ok = focus_target("left")
         self.assertTrue(ok)
         mock_script.assert_called_once()
@@ -88,14 +88,14 @@ class TestFocusTarget(unittest.TestCase):
     @_use_temp_targets
     def test_focus_updates_current_target(self):
         save_target("right", WindowTarget(app="claude", title="right"))
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             focus_target("right")
         self.assertEqual(wt._current_target, "right")
 
     @_use_temp_targets
     def test_focus_target_no_title_omits_window_clause(self):
         save_target("bare", WindowTarget(app="Finder", title=""))
-        with patch.object(wt, "_run_script", return_value=("", True)) as mock_script:
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)) as mock_script:
             focus_target("bare")
         script = mock_script.call_args[0][0]
         self.assertNotIn("first window", script)
@@ -108,10 +108,29 @@ class TestFocusTarget(unittest.TestCase):
         self.assertFalse(ok)
 
     @_use_temp_targets
+    def test_focus_missing_marker_returns_false(self):
+        # Script exits 0 (process alive) but window was not found — old exit-code
+        # check would have wrongly returned True here.
+        save_target("stale", WindowTarget(app="RunningApp", title="old window"))
+        with patch.object(wt, "_run_script", return_value=("MISSING", True)):
+            ok = focus_target("stale")
+        self.assertFalse(ok)
+
+    @_use_temp_targets
+    def test_focus_missing_marker_does_not_update_current_target(self):
+        save_target("good", WindowTarget(app="A", title=""))
+        save_target("stale", WindowTarget(app="RunningApp", title="old window"))
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
+            focus_target("good")
+        with patch.object(wt, "_run_script", return_value=("MISSING", True)):
+            focus_target("stale")
+        self.assertEqual(wt._current_target, "good")
+
+    @_use_temp_targets
     def test_focus_applescript_failure_does_not_update_current_target(self):
         save_target("good", WindowTarget(app="A", title=""))
         save_target("dead", WindowTarget(app="ClosedApp", title="gone"))
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             focus_target("good")
         with patch.object(wt, "_run_script", return_value=("", False)):
             focus_target("dead")
@@ -134,7 +153,7 @@ class TestDeleteTarget(unittest.TestCase):
     @_use_temp_targets
     def test_delete_clears_current_target(self):
         save_target("c", WindowTarget(app="X", title=""))
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             focus_target("c")
         delete_target("c")
         self.assertIsNone(wt._current_target)
@@ -152,7 +171,7 @@ class TestNextPreviousTarget(unittest.TestCase):
         save_target("b", WindowTarget(app="B", title=""))
         save_target("c", WindowTarget(app="C", title=""))
 
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             n1 = next_target()
             n2 = next_target()
             n3 = next_target()
@@ -168,7 +187,7 @@ class TestNextPreviousTarget(unittest.TestCase):
         save_target("a", WindowTarget(app="A", title=""))
         save_target("b", WindowTarget(app="B", title=""))
 
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             p1 = previous_target()
             p2 = previous_target()
 
@@ -179,7 +198,7 @@ class TestNextPreviousTarget(unittest.TestCase):
     def test_next_from_unknown_starts_at_first(self):
         save_target("x", WindowTarget(app="X", title=""))
         wt._current_target = "does_not_exist"
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             n = next_target()
         self.assertEqual(n, "x")
 
@@ -221,7 +240,7 @@ class TestFocusSets(unittest.TestCase):
         configure_focus_sets({"coding": ["a", "c"]})
         set_focus_set("coding")
 
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             n1 = next_target()
             n2 = next_target()
             n3 = next_target()
@@ -238,7 +257,7 @@ class TestFocusSets(unittest.TestCase):
         configure_focus_sets({"coding": ["a", "c"]})
         set_focus_set("coding")
 
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             p1 = previous_target()
             p2 = previous_target()
 
@@ -252,7 +271,7 @@ class TestFocusSets(unittest.TestCase):
         configure_focus_sets({"coding": ["a", "ghost"]})
         set_focus_set("coding")
 
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             n = next_target()
 
         self.assertEqual(n, "a")
@@ -266,7 +285,7 @@ class TestFocusSets(unittest.TestCase):
         set_focus_set("coding")
         set_focus_set(None)
 
-        with patch.object(wt, "_run_script", return_value=("", True)):
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
             n1 = next_target()
             n2 = next_target()
             n3 = next_target()

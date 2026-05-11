@@ -114,9 +114,12 @@ def focus_target(name: str) -> bool:
             f'        try\n'
             f'            set w to first window whose name contains "{title}"\n'
             f'            perform action "AXRaise" of w\n'
+            f'        on error\n'
+            f'            return "MISSING"\n'
             f'        end try\n'
             f'    end tell\n'
-            f'end tell'
+            f'end tell\n'
+            f'return "FOUND"'
         )
     else:
         script = (
@@ -124,11 +127,12 @@ def focus_target(name: str) -> bool:
             f'    tell process "{app}"\n'
             f'        set frontmost to true\n'
             f'    end tell\n'
-            f'end tell'
+            f'end tell\n'
+            f'return "FOUND"'
         )
-    _, ok = _run_script(script)
-    if not ok:
-        logger.warning("focus_target: AppleScript failed for '%s'", name)
+    marker, _ = _run_script(script)
+    if marker != "FOUND":
+        logger.warning("focus_target: window not found for '%s'", name)
         return False
     _current_target = name
     return True
