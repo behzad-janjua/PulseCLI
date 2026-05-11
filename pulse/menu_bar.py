@@ -67,6 +67,7 @@ class PulseApp(rumps.App):
             self._model_item,
             self._action_item,
             rumps.separator,
+            rumps.MenuItem("Correct Last Dictation…", callback=self._correct_last_dictation),
             rumps.MenuItem("Teach New Gesture…", callback=self._teach_gesture),
             rumps.MenuItem("Correct Last Gesture…", callback=self._correct_last_gesture),
             rumps.MenuItem("Retrain Model", callback=self._retrain_model),
@@ -239,6 +240,29 @@ class PulseApp(rumps.App):
             self._queue_action(f"Saved target: {name}")
         else:
             rumps.alert(f"Could not save target '{name}'.", ok="OK")
+
+    def _correct_last_dictation(self, _) -> None:
+        raw, typed = self._engine.get_last_dictation()
+        if typed is None:
+            rumps.alert("No recent dictation to correct.", ok="OK")
+            return
+        shown = typed if typed == raw else f"{typed}\n\n(raw: {raw})"
+        response = rumps.Window(
+            message=f"Last dictation:\n{shown}\n\nEnter the corrected full text:",
+            title="Correct Last Dictation…",
+            default_text=typed,
+            ok="Save",
+            cancel="Cancel",
+        ).run()
+        if not response.clicked:
+            return
+        corrected = response.text.strip()
+        if not corrected:
+            return
+        self._run_learning_task(
+            lambda: self._engine.correct_last_dictation(corrected),
+            "Saving dictation correction…",
+        )
 
     def _teach_gesture(self, _) -> None:
         label = self._prompt_label(

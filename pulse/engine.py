@@ -108,6 +108,29 @@ class PulseEngine:
     def get_last_gesture(self) -> str | None:
         return self._last_gesture or self._reader.get_last_gesture_label()
 
+    def get_last_dictation(self) -> tuple[str | None, str | None]:
+        """Return (raw_transcript, typed_text) from the most recent dictation."""
+        return self._voice_trigger.get_last_dictation()
+
+    def correct_last_dictation(self, corrected_text: str) -> str:
+        """Infer phrase corrections from the last dictation and persist them."""
+        from pulse.dictionary import add_correction, infer_corrections
+        raw, typed = self._voice_trigger.get_last_dictation()
+        if raw is None:
+            raise ValueError("No recent dictation to correct")
+        pairs = infer_corrections(raw, corrected_text)
+        if not pairs and typed and typed.lower().strip() != corrected_text.lower().strip():
+            pairs = [(typed.lower().strip(), corrected_text.strip())]
+        for spoken, replacement in pairs:
+            add_correction(spoken, replacement)
+        if pairs:
+            summary = "; ".join(f'"{s}" → "{r}"' for s, r in pairs)
+            feedback = f"Remembered: {summary}"
+        else:
+            feedback = "No changes detected"
+        self._on_action(feedback)
+        return feedback
+
     def correct_last_gesture(self, label: str) -> str:
         samples = self._reader.get_recent_emg_window()
         if samples is None:

@@ -28,6 +28,8 @@ class VoiceTrigger:
         self._claude_proc: subprocess.Popen | None = None
         self._with_context: bool = False
         self._context_target: str | None = None
+        self._last_raw: str | None = None
+        self._last_typed: str | None = None
 
     def toggle_with_context(self, target: str | None = None) -> None:
         """Like toggle(), but appends a Context block to the transcribed text."""
@@ -66,22 +68,32 @@ class VoiceTrigger:
         elif event.gesture == Gesture.WAVE_OUT:
             self._handle_interrupt()
 
+    def get_last_dictation(self) -> tuple[str | None, str | None]:
+        """Return (raw_transcript, typed_text) from the most recent dictation."""
+        return self._last_raw, self._last_typed
+
     def _transcribe_and_send(self) -> None:
         with_context = self._with_context
         context_target = self._context_target
         self._with_context = False
         self._context_target = None
 
-        text = self._recorder.stop_and_transcribe()
+        raw = self._recorder.stop_and_transcribe()
         self._on_state("connected")
 
-        if not text:
+        if not raw:
             print(f"{RED}[PULSE] no speech detected{RESET}", flush=True)
             return
 
+        from pulse.dictionary import apply_dictionary
+        corrected = apply_dictionary(raw)
+        self._last_raw = raw
+        self._last_typed = corrected
+
+        text = corrected
         if with_context:
             from pulse.prompt_context import compose_prompt
-            text = compose_prompt(text, context_target)
+            text = compose_prompt(corrected, context_target)
 
         print(f"{GREEN}[PULSE] → \"{text[:80]}{'...' if len(text) > 80 else ''}\"{RESET}", flush=True)
         self._on_action(text)
