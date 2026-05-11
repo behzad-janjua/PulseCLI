@@ -72,7 +72,7 @@ class PulseEngine:
 
     def start(self) -> None:
         """Start the MYO loop on a background thread."""
-        self._myo_thread = threading.Thread(target=self._reader.start, daemon=False, name="myo-reader")
+        self._myo_thread = threading.Thread(target=self._reader.start, daemon=True, name="myo-reader")
         self._myo_thread.start()
 
     def run_blocking(self) -> None:
@@ -84,6 +84,8 @@ class PulseEngine:
         self._reader.stop()
         if self._myo_thread is not None:
             self._myo_thread.join(timeout=3.0)
+            if self._myo_thread.is_alive():
+                logger.warning("MYO thread did not exit within timeout; process will exit anyway.")
         self._voice_trigger.close()
 
     @property

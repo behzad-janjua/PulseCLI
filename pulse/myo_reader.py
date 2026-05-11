@@ -216,6 +216,10 @@ class MyoReader:
 
     def stop(self) -> None:
         self._stop_event.set()
+        try:
+            self._myo.disconnect()   # unblocks any blocking myo.run() call
+        except Exception:
+            pass
 
     def start(self) -> None:
         self._on_myo_state("connecting")
@@ -245,6 +249,9 @@ class MyoReader:
         except KeyboardInterrupt:
             pass
         finally:
-            self._myo.disconnect()
+            try:
+                self._myo.disconnect()
+            except Exception:
+                pass
             self._on_myo_state("disconnected")
             logger.info("MYO disconnected.")
