@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import rumps
 
+from pulse.target_picker import launch_picker
 from pulse.window_targets import (
     WindowTarget,
     delete_target,
@@ -44,6 +45,9 @@ class PulseApp(rumps.App):
         self._save_window_item = rumps.MenuItem(
             "Save Current Window As…", callback=self._save_window_as
         )
+        self._pick_window_item = rumps.MenuItem(
+            "Focus Window…", callback=self._pick_window
+        )
         self._targets_item = rumps.MenuItem("Window Targets")
         self._no_targets_item = rumps.MenuItem("(none saved)")
         self._targets_item.update([self._no_targets_item])
@@ -58,6 +62,7 @@ class PulseApp(rumps.App):
             rumps.MenuItem("Correct Last Gesture…", callback=self._correct_last_gesture),
             rumps.MenuItem("Retrain Model", callback=self._retrain_model),
             rumps.separator,
+            self._pick_window_item,
             self._save_window_item,
             self._targets_item,
             rumps.separator,
@@ -142,6 +147,12 @@ class PulseApp(rumps.App):
             if not ok:
                 rumps.alert(f"Target '{name}' not found.\nIt may have been closed.", ok="OK")
         return _cb
+
+    def _pick_window(self, _) -> None:
+        if not list_targets():
+            rumps.alert("No targets saved yet.\n\nUse 'Save Current Window As…' or a save_target gesture first.", ok="OK")
+            return
+        launch_picker()
 
     def _make_delete_cb(self, name: str):
         def _cb(_):
