@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import rumps
 
+from pulse.hud import HUD
 from pulse.target_picker import launch_picker
 from pulse.frontmost_app import get_frontmost_app
 from pulse.window_targets import (
@@ -86,6 +87,7 @@ class PulseApp(rumps.App):
 
         self._snapshot_window: WindowTarget | None = None
         self._tick_count = 0
+        self._hud: HUD | None = None
 
         engine.on_state_change(self._queue_state)
         engine.on_action(self._queue_action)
@@ -106,10 +108,15 @@ class PulseApp(rumps.App):
         with self._lock:
             self._gesture = gesture
             self._confidence = confidence
+        if self._hud is not None:
+            self._hud.show(gesture, confidence)
 
     _SNAPSHOT_EXCLUDED = {"Python", "python3", "python", "Pulse"}
 
     def _tick(self, _) -> None:
+        if self._hud is None:
+            self._hud = HUD()
+
         with self._lock:
             state    = self._state
             action   = self._action
