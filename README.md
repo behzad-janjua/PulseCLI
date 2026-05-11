@@ -1,24 +1,64 @@
 # PulseCLI
 
-A wearable gesture + voice interface for AI-assisted software engineering.
+Control your entire dev environment with your arm.
 
-Wear a MYO armband. Wave to switch apps. Make a fist to speak. Your voice gets transcribed locally and typed wherever your cursor is — including Claude Code.
+Wear a MYO armband. Flex to speak. Wave to switch windows. Route voice prompts to specific Claude sessions — with full git context attached — without touching your keyboard.
 
-No cloud. No subscription. Runs entirely on your machine.
+No cloud. No subscription. Everything runs on your machine.
 
 ---
 
-## What it does
+## Gestures
 
-| Gesture | Action |
+| Gesture | Default action |
 |---|---|
-| Fist (1st) | Start voice recording |
-| Fist (2nd) | Stop, transcribe, type at cursor |
-| Wave out | Switch to next app (Cmd+Tab) |
-| Wave in | Switch to previous app |
+| Fist × 1 | Start voice recording |
+| Fist × 2 | Stop, transcribe, type at cursor |
+| Wave out | Next app (Cmd+Tab) |
+| Wave in | Previous app |
 | Fingers spread | Mission Control |
 
-Voice is transcribed locally using [Whisper](https://github.com/openai/whisper). No audio leaves your machine.
+All gestures are remappable. Any gesture can trigger any action — keystrokes, shell commands, window focus, or AI prompts with context.
+
+---
+
+## Two-Claude Command Center
+
+The built-in prompt context system lets you route prompts to named windows with cwd, branch, and git state automatically appended.
+
+```yaml
+profiles:
+  default:
+    wave_in:
+      action: focus_target
+      target: claude_left
+
+    wave_out:
+      action: focus_target
+      target: claude_right
+
+    fingers_spread:
+      action: context_type
+      text: "Review this"
+
+    thumb_to_pinky:
+      action: context_type
+      text: "Write tests"
+```
+
+When `fingers_spread` fires, the prompt lands in the focused Claude session looking like this:
+
+```
+Review this
+
+Context:
+- app: Terminal
+- cwd: PulseCLI
+- branch: feature/prompt-context
+- uncommitted changes: yes
+```
+
+Save targets from the menu bar or via a `save_target` gesture. Targets persist across restarts in `.pulse_targets.yaml`.
 
 ---
 
@@ -26,22 +66,18 @@ Voice is transcribed locally using [Whisper](https://github.com/openai/whisper).
 
 - **MYO armband** — EMG muscle sensor, reads gesture intent from forearm
 - **pyomyo** — direct USB dongle communication, no Myo Connect required
-- **sounddevice** — mic capture
-- **Whisper** — local speech-to-text (base model, ~145MB)
-- **pynput** — keyboard simulation for typing and app switching
-- **rumps** — macOS menu bar app
-- **scikit-learn** — personal gesture classifier (optional, trained on your own EMG data)
+- **Whisper** — local speech-to-text (base model, ~145MB, never leaves your machine)
+- **pynput** — keyboard simulation
+- **rumps** — macOS menu bar
+- **scikit-learn** — personal gesture classifier trained on your own EMG data
 
 ---
 
 ## Setup
 
 ```bash
-# System dependencies
-make deps
-
-# Python environment
-make install
+make deps      # install portaudio + ffmpeg via Homebrew
+make install   # create .venv and install Python packages
 ```
 
 Requires Python 3.11+, macOS, and the MYO USB Bluetooth dongle.
@@ -50,90 +86,55 @@ Grant your terminal **Accessibility** and **Microphone** permissions in System S
 
 ---
 
-## Usage
+## Run
 
 ```bash
-make run        # hardware gesture classifier (default)
+make run        # default hardware gesture classifier
 make custom     # your personal trained classifier
 make discover   # debug mode — prints raw MYO pose values
-make test       # run unit tests (no hardware required)
+make test       # run tests (no hardware required)
 ```
-
----
-
-## Menu bar
-
-Pulse runs as a macOS menu bar app. Click **Pulse** in the menu bar to see:
-
-| Item | Meaning |
-|---|---|
-| Waiting for Myo… | Dongle connected, armband not yet found |
-| Ready | Armband connected, listening for gestures |
-| Recording… | Voice capture in progress |
-| Transcribing… | Whisper processing audio |
-| Retraining model… | Local gesture model is being updated |
-
-The menu also shows your last detected gesture and the last action Pulse performed.
-
-Learning controls are local-only:
-
-| Item | Effect |
-|---|---|
-| Teach New Gesture… | Save recent EMG samples under a new gesture label |
-| Correct Last Gesture… | Relabel the latest EMG window after a bad prediction |
-| Retrain Model | Rebuild the personal classifier from `data/raw/` |
 
 ---
 
 ## Recipe config (`pulse.yaml`)
 
-Drop a `pulse.yaml` at the project root to remap any gesture to any action — no Python required.
-Delete it to go back to the default behaviour.
+Drop a `pulse.yaml` at the project root to remap gestures. Delete it to restore defaults.
+
+### Action types
+
+| Type | Fields | Effect |
+|---|---|---|
+| `dictate` | — | Toggle voice recording |
+| `key` | `keys: [...]` | Hold modifiers, tap last key |
+| `type` | `text: "..."` | Type literal text at cursor |
+| `shell` | `command: "..."` | Run shell command in background |
+| `context_type` | `text`, `target?` | Type text + cwd/branch/app context block |
+| `context_dictate` | `target?` | Dictate + context block appended on transcription |
+| `save_target` | `target` | Save frontmost window under a name |
+| `focus_target` | `target` | Raise a saved window |
+| `next_target` | — | Cycle forward through saved windows |
+| `previous_target` | — | Cycle backward through saved windows |
+
+Gestures can be chained into sequences:
 
 ```yaml
-profiles:
-  default:
-    fist: dictate              # toggle voice recording
-    wave_out:
-      action: key
-      keys: [cmd, tab]         # hold Cmd, tap Tab
-    wave_in:
-      action: key
-      keys: [cmd, shift, tab]
-    fingers_spread:
-      action: key
-      keys: [ctrl, up]         # Mission Control
-
-  # App-specific overrides (macOS process name)
-  Xcode:
-    fist:
-      action: key
-      keys: [cmd, b]           # Build instead of dictate
-
 sequences:
-  # Chain of gestures fired within 1.2 s
   - gestures: [fist, wave_out]
     action:
       action: shell
       command: "open -a 'Claude'"
 ```
 
-### Action types
+Sequences take priority over single-gesture bindings and must complete within 1.2 s.
 
-| Type | Fields | Effect |
-|---|---|---|
-| `dictate` | — | Toggle voice recording (FIST default) |
-| `key` | `keys: [...]` | Hold modifiers, tap last key |
-| `type` | `text: "..."` | Type literal text at cursor |
-| `shell` | `command: "..."` | Run shell command in background |
-
-See `pulse.yaml.example` for a fully annotated reference config.
+See `pulse.yaml.example` for a fully annotated reference.
 
 ---
 
 ## Personal gesture training
 
-The MYO's built-in classifier works out of the box. If you want a classifier trained specifically on your arm:
+The MYO's built-in classifier works out of the box. To train one on your arm:
 
 ```bash
 make collect              # guided data collection (~10 min)
@@ -141,17 +142,17 @@ make train                # trains a Random Forest on your data
 make custom               # run with your personal model
 ```
 
-To add a custom gesture that doesn't exist in the default set:
+Add a gesture that doesn't exist in the default set:
 
 ```bash
-make add GESTURE=pinch    # collect data for your new gesture
-make train                # retrain
-make custom               # your new gesture is now live
+make add GESTURE=pinch
+make train
+make custom
 ```
 
-You can also teach or correct gestures from the menu bar. Hold the gesture, choose **Teach New Gesture…**, name it, then choose **Retrain Model**. For best adaptive learning, start with `make collect && make train`, then run Pulse with `make custom`. In custom mode, the model reloads after retraining. If you started with `make run`, restart with `make custom` after retraining.
+You can also teach and correct gestures live from the menu bar — no restart required.
 
-Custom gestures that aren't in the default vocabulary are emitted with `metadata["custom_label"]`, and recipe mode can bind them directly:
+Custom gestures emit `metadata["custom_label"]` and bind directly in `pulse.yaml`:
 
 ```yaml
 profiles:
@@ -161,7 +162,7 @@ profiles:
       keys: [cmd, b]
 ```
 
-All learning data stays local in `data/raw/`, and trained models stay local in `models/`.
+All training data stays local in `data/raw/`. Models stay local in `models/`.
 
 ---
 
@@ -170,24 +171,24 @@ All learning data stays local in `data/raw/`, and trained models stay local in `
 ```
 MYO Hardware
     ↓
-myo_reader.py       — gesture detection (hardware or custom EMG classifier)
+myo_reader.py        gesture detection (hardware or custom EMG classifier)
     ↓
-Dispatcher          — routes GestureEvents to registered handlers
+Dispatcher           routes GestureEvents to registered handlers
     ↓
-┌─────────────────────────────────────────┐
-│ handlers/logger.py                      │  logs every event
-│ handlers/recipe_handler.py  (if yaml)   │  gesture → action from pulse.yaml
-│   └── frontmost_app.py                  │  macOS app detection for profiles
-│ handlers/voice_trigger.py   (default)   │  FIST → record → Whisper → type
-│ handlers/window_navigator.py (default)  │  WAVE → Cmd+Tab
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ handlers/recipe_handler.py   (if yaml)       │  gesture → action from pulse.yaml
+│   ├── prompt_context.py                      │  cwd/branch/app context builder
+│   ├── window_targets.py                      │  named window save/focus/cycle
+│   └── frontmost_app.py                       │  macOS app detection for profiles
+│ handlers/voice_trigger.py    (default)       │  fist → record → Whisper → type
+│ handlers/window_navigator.py (default)       │  wave → Cmd+Tab
+│ handlers/logger.py                           │  logs every event
+└──────────────────────────────────────────────┘
     ↓
-engine.py           — owns all hardware/audio; exposes state + action callbacks
+engine.py            owns hardware/audio; exposes state + action callbacks
     ↓
-menu_bar.py         — macOS menu bar UI (rumps); reflects live state
+menu_bar.py          macOS menu bar UI; reflects live state, manages targets
 ```
-
-Adding a new gesture action is one line: `dispatcher.register(your_handler)`.
 
 ---
 
@@ -195,34 +196,33 @@ Adding a new gesture action is one line: `dispatcher.register(your_handler)`.
 
 ```
 PulseCLI/
-├── main.py                         entry point
-├── pulse.yaml.example              annotated recipe config reference
+├── main.py
+├── pulse.yaml                      your active recipe config
+├── pulse.yaml.example              annotated reference
 ├── pulse/
-│   ├── engine.py                   hardware/audio owner; UI-facing API
-│   ├── menu_bar.py                 macOS menu bar app
-│   ├── myo_reader.py               MYO connection + gesture pipeline
-│   ├── dispatcher.py               event routing
-│   ├── events.py                   GestureEvent dataclass
-│   ├── gestures.py                 Gesture enum
-│   ├── config.py                   pulse.yaml parser + dataclasses
-│   ├── frontmost_app.py            macOS frontmost app detection
-│   ├── learning.py                 local adaptive gesture sample saving
-│   ├── training.py                 reusable Random Forest training
-│   ├── voice_recorder.py           mic capture + Whisper transcription
+│   ├── engine.py
+│   ├── menu_bar.py
+│   ├── myo_reader.py
+│   ├── dispatcher.py
+│   ├── config.py
+│   ├── prompt_context.py           cwd/branch/app context for AI prompts
+│   ├── window_targets.py           named window save/focus/cycle/delete
+│   ├── target_picker.py            floating window picker overlay
+│   ├── voice_recorder.py
+│   ├── learning.py
+│   ├── training.py
+│   ├── frontmost_app.py
 │   ├── emg/
-│   │   └── features.py             EMG signal feature extraction
+│   │   └── features.py
 │   └── handlers/
-│       ├── recipe_handler.py       YAML-driven gesture → action dispatch
-│       ├── voice_trigger.py        voice recording + typing
-│       ├── window_navigator.py     app switching
-│       └── logger.py               event logging
+│       ├── recipe_handler.py
+│       ├── voice_trigger.py
+│       ├── window_navigator.py
+│       └── logger.py
 ├── scripts/
-│   ├── collect.py                  EMG training data collection
-│   └── train.py                    gesture classifier training
+│   ├── collect.py
+│   └── train.py
 └── tests/
-    ├── test_config.py              config parser tests
-    ├── test_learning.py            local learning tests
-    └── test_recipe.py              recipe handler tests
 ```
 
 ---
