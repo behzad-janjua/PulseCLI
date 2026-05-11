@@ -11,7 +11,7 @@ CONFIG_PATH = Path("pulse.yaml")
 VALID_ACTIONS = {
     "dictate", "key", "type", "shell",
     "save_target", "focus_target", "next_target", "previous_target", "pick_target",
-    "set_focus_set",
+    "set_focus_set", "broadcast",
     "context_type", "context_dictate",
 }
 
@@ -65,6 +65,8 @@ def _parse_action(raw: Any, context: str) -> ActionConfig:
 
     if action_type in {"save_target", "focus_target"} and not raw.get("target"):
         raise ConfigError(f"{context}: '{action_type}' requires a 'target' field")
+    if action_type == "broadcast" and not raw.get("text"):
+        raise ConfigError(f"{context}: 'broadcast' requires a 'text' field")
 
     return ActionConfig(
         type=action_type,

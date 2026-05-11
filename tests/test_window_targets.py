@@ -12,6 +12,7 @@ from pulse.window_targets import (
     delete_target,
     focus_target,
     get_active_set,
+    get_focus_set_members,
     list_targets,
     next_target,
     previous_target,
@@ -202,6 +203,51 @@ class TestNextPreviousTarget(unittest.TestCase):
             n = next_target()
         self.assertEqual(n, "x")
 
+    @_use_temp_targets
+    def test_next_skips_stale_and_finds_next(self):
+        save_target("a", WindowTarget(app="AppA", title=""))
+        save_target("b", WindowTarget(app="AppB", title=""))
+        save_target("c", WindowTarget(app="AppC", title=""))
+
+        def _side_effect(script, *args, **kwargs):
+            return ("MISSING", True) if "AppB" in script else ("FOUND", True)
+
+        with patch.object(wt, "_run_script", return_value=("FOUND", True)):
+            focus_target("a")       # set _current_target = "a"
+        with patch.object(wt, "_run_script", side_effect=_side_effect):
+            n = next_target()       # should skip b (MISSING) and return c
+        self.assertEqual(n, "c")
+
+    @_use_temp_targets
+    def test_next_returns_none_when_all_stale(self):
+        save_target("a", WindowTarget(app="A", title=""))
+        save_target("b", WindowTarget(app="B", title=""))
+        with patch.object(wt, "_run_script", return_value=("MISSING", True)):
+            result = next_target()
+        self.assertIsNone(result)
+
+    @_use_temp_targets
+    def test_previous_skips_stale_and_finds_previous(self):
+        save_target("a", WindowTarget(app="AppA", title=""))
+        save_target("b", WindowTarget(app="AppB", title=""))
+        save_target("c", WindowTarget(app="AppC", title=""))
+
+        def _side_effect(script, *args, **kwargs):
+            return ("MISSING", True) if "AppB" in script else ("FOUND", True)
+
+        with patch.object(wt, "_run_script", side_effect=_side_effect):
+            focus_target("c")       # set _current_target = "c"
+            p = previous_target()   # should skip b (MISSING) and return a
+        self.assertEqual(p, "a")
+
+    @_use_temp_targets
+    def test_previous_returns_none_when_all_stale(self):
+        save_target("a", WindowTarget(app="A", title=""))
+        save_target("b", WindowTarget(app="B", title=""))
+        with patch.object(wt, "_run_script", return_value=("MISSING", True)):
+            result = previous_target()
+        self.assertIsNone(result)
+
 
 class TestFocusSets(unittest.TestCase):
     @_use_temp_targets
@@ -291,6 +337,17 @@ class TestFocusSets(unittest.TestCase):
             n3 = next_target()
 
         self.assertEqual([n1, n2, n3], ["a", "b", "c"])
+
+    @_use_temp_targets
+    def test_get_focus_set_members_returns_copy(self):
+        configure_focus_sets({"claude": ["claude_left", "claude_right"]})
+        members = get_focus_set_members("claude")
+        self.assertEqual(members, ["claude_left", "claude_right"])
+
+    @_use_temp_targets
+    def test_get_focus_set_members_unknown_returns_none(self):
+        configure_focus_sets({"claude": ["claude_left"]})
+        self.assertIsNone(get_focus_set_members("nonexistent"))
 
 
 if __name__ == "__main__":

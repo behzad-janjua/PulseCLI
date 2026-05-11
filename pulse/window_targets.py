@@ -212,6 +212,13 @@ def get_active_set() -> str | None:
     return _active_set
 
 
+def get_focus_set_members(name: str) -> list[str] | None:
+    """Return the member list for a named focus set, or None if undefined."""
+    if name not in _focus_sets:
+        return None
+    return list(_focus_sets[name])
+
+
 def _cycle_keys() -> list[str]:
     """Return the ordered target names to cycle through, respecting the active focus set."""
     all_keys = list(_load_raw().keys())

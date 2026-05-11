@@ -214,5 +214,34 @@ class TestLoadConfig(unittest.TestCase):
         p.unlink()
 
 
+    def test_broadcast_action_parsed(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                fist:
+                  action: broadcast
+                  target: claude_sessions
+                  text: "review this"
+        """)
+        cfg = load_config(p)
+        action = cfg.profiles["default"]["fist"]
+        self.assertEqual(action.type, "broadcast")
+        self.assertEqual(action.target, "claude_sessions")
+        self.assertEqual(action.text, "review this")
+        p.unlink()
+
+    def test_broadcast_missing_text_raises(self):
+        p = _write_yaml("""
+            profiles:
+              default:
+                fist:
+                  action: broadcast
+                  target: claude_sessions
+        """)
+        with self.assertRaises(ConfigError):
+            load_config(p)
+        p.unlink()
+
+
 if __name__ == "__main__":
     unittest.main()

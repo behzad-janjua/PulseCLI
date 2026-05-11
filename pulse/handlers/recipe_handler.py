@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
+import time
 from typing import TYPE_CHECKING
 
 from pynput.keyboard import Controller, Key
@@ -19,6 +20,7 @@ from pulse.window_targets import (
     save_target as wt_save,
     set_focus_set as wt_set_focus_set,
     get_active_set as wt_get_active_set,
+    get_focus_set_members as wt_get_focus_set_members,
 )
 
 if TYPE_CHECKING:
@@ -136,6 +138,26 @@ def _execute_action(action: ActionConfig, voice_trigger: VoiceTrigger) -> None:
             print(f"{GREEN}[PULSE] focus set → {label}{RESET}", flush=True)
         else:
             print(f"{YELLOW}[PULSE] set_focus_set: '{set_name}' not defined{RESET}", flush=True)
+
+    elif action.type == "broadcast":
+        set_name = action.target or wt_get_active_set()
+        if not set_name:
+            print(f"{RED}[PULSE] broadcast: no focus set active or specified{RESET}", flush=True)
+            return
+        members = wt_get_focus_set_members(set_name)
+        if members is None:
+            print(f"{YELLOW}[PULSE] broadcast: set '{set_name}' not defined{RESET}", flush=True)
+            return
+        sent, skipped = 0, 0
+        for target_name in members:
+            if wt_focus(target_name):
+                time.sleep(0.15)
+                _keyboard.type(action.text)
+                sent += 1
+            else:
+                print(f"{YELLOW}[PULSE] broadcast: skipped '{target_name}' (not available){RESET}", flush=True)
+                skipped += 1
+        print(f"{GREEN}[PULSE] broadcast → {set_name} ({sent} sent, {skipped} skipped){RESET}", flush=True)
 
     elif action.type == "context_type":
         from pulse.prompt_context import compose_prompt
