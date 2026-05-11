@@ -22,7 +22,7 @@ class WindowTarget:
     title: str
 
 
-def _run_script(script: str, timeout: float = 2.0) -> str:
+def _run_script(script: str, timeout: float = 2.0) -> tuple[str, bool]:
     try:
         result = subprocess.run(
             ["osascript", "-e", script],
@@ -30,9 +30,9 @@ def _run_script(script: str, timeout: float = 2.0) -> str:
             text=True,
             timeout=timeout,
         )
-        return result.stdout.strip()
+        return result.stdout.strip(), result.returncode == 0
     except Exception:
-        return ""
+        return "", False
 
 
 def get_frontmost_window() -> WindowTarget | None:
@@ -47,7 +47,7 @@ def get_frontmost_window() -> WindowTarget | None:
         '    return appName & "|||" & winTitle\n'
         'end tell'
     )
-    raw = _run_script(script)
+    raw, _ = _run_script(script)
     if not raw or "|||" not in raw:
         return None
     parts = raw.split("|||", 1)
@@ -123,7 +123,10 @@ def focus_target(name: str) -> bool:
             f'    end tell\n'
             f'end tell'
         )
-    _run_script(script)
+    _, ok = _run_script(script)
+    if not ok:
+        logger.warning("focus_target: AppleScript failed for '%s'", name)
+        return False
     _current_target = name
     return True
 
