@@ -1,0 +1,17 @@
+profiles:
+  default:
+    wave_in:
+      action: focus_target
+      target: claude_left
+
+    wave_out:
+      action: focus_target
+      target: claude_right
+
+    fingers_spread:
+      action: context_type
+      text: "Review this"
+
+    thumb_to_pinky:
+      action: context_type
+      text: "Write tests"
